@@ -15,8 +15,14 @@ export default async function Home() {
       </h1>
 
       {user ? (
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-6">
           <p className="text-lg text-white">Welcome, {user.email}</p>
+          <Link
+            href="/episodes"
+            className="rounded-md bg-[#c9a84c] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#d4b85c]"
+          >
+            View episodes →
+          </Link>
           <form action={logout}>
             <button
               type="submit"

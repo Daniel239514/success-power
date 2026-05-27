@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import BottomNav from "./bottom-nav";
 import SwRegister from "./sw-register";
 
 const geistSans = Geist({
@@ -44,6 +45,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <BottomNav />
         <SwRegister />
       </body>
     </html>
