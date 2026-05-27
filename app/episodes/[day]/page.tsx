@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { calculateDayNumber } from '@/lib/dayNumber'
 
 export default async function EpisodePage({
   params,
@@ -8,9 +9,9 @@ export default async function EpisodePage({
   params: Promise<{ day: string }>
 }) {
   const { day } = await params
-  const dayNumber = Number.parseInt(day, 10)
+  const requestedDay = Number.parseInt(day, 10)
 
-  if (Number.isNaN(dayNumber)) {
+  if (Number.isNaN(requestedDay)) {
     notFound()
   }
 
@@ -24,10 +25,26 @@ export default async function EpisodePage({
     redirect('/login')
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('subscription_start_date')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || !profile) {
+    redirect('/episodes')
+  }
+
+  const currentDay = calculateDayNumber(profile.subscription_start_date)
+
+  if (requestedDay > currentDay) {
+    redirect('/episodes')
+  }
+
   const { data: episode, error } = await supabase
     .from('episodes')
     .select('*')
-    .eq('day_number', dayNumber)
+    .eq('day_number', requestedDay)
     .single()
 
   if (error || !episode) {
