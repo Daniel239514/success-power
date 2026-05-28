@@ -38,9 +38,12 @@ export default async function Home() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('subscription_start_date')
+    .select('subscription_start_date, subscription_status, subscription_plan')
     .eq('id', user.id)
     .single()
+
+  const isSubscriber = profile?.subscription_status === 'active'
+  const planLabel = profile?.subscription_plan === 'annual' ? 'Annual' : 'Monthly'
 
   const currentDay = profile
     ? calculateDayNumber(profile.subscription_start_date)
@@ -59,6 +62,24 @@ export default async function Home() {
       </h1>
 
       <p className="text-sm text-neutral-400">Welcome, {user.email}</p>
+
+      {isSubscriber ? (
+        <span className="rounded-full border border-[#c9a84c] bg-[#c9a84c]/10 px-4 py-1.5 text-sm font-semibold text-[#c9a84c]">
+          ★ Active subscriber — {planLabel}
+        </span>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <span className="rounded-full border border-neutral-700 px-4 py-1.5 text-sm text-neutral-400">
+            Free plan
+          </span>
+          <Link
+            href="/subscribe"
+            className="text-sm font-semibold text-[#c9a84c] underline-offset-4 hover:underline"
+          >
+            Go Premium →
+          </Link>
+        </div>
+      )}
 
       <div className="text-center">
         <p className="text-sm uppercase tracking-widest text-neutral-500">Today</p>
