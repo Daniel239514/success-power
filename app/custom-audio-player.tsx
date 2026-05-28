@@ -96,11 +96,43 @@ export default function CustomAudioPlayer({
     }
   }
 
+  // Tell the OS how long the track is, where we are, and the speed. This is
+  // what makes the lock-screen scrubber accurate and the remote play/pause
+  // reliable (especially on iOS, which otherwise freezes a paused page).
+  function updatePositionState() {
+    const audio = audioRef.current
+    if (!audio) return
+    if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) return
+    navigator.mediaSession.setPositionState({
+      duration: audio.duration,
+      playbackRate: audio.playbackRate,
+      position: audio.currentTime,
+    })
+  }
+
+  function handlePlay() {
+    setIsPlaying(true)
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+    updatePositionState()
+  }
+
+  function handlePause() {
+    setIsPlaying(false)
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
+  }
+
+  function handleLoadedMetadata(event: React.SyntheticEvent<HTMLAudioElement>) {
+    setDuration(event.currentTarget.duration)
+    updatePositionState()
+  }
+
   function cycleSpeed() {
     const currentIndex = SPEEDS.indexOf(speed)
     const nextSpeed = SPEEDS[(currentIndex + 1) % SPEEDS.length]
     setSpeed(nextSpeed)
     if (audioRef.current) audioRef.current.playbackRate = nextSpeed
+    updatePositionState()
   }
 
   function handleSeek(event: React.ChangeEvent<HTMLInputElement>) {
@@ -109,6 +141,7 @@ export default function CustomAudioPlayer({
     const newTime = Number(event.target.value)
     audio.currentTime = newTime
     setCurrentTime(newTime)
+    updatePositionState()
   }
 
   return (
@@ -118,9 +151,9 @@ export default function CustomAudioPlayer({
         ref={audioRef}
         src={src}
         preload="metadata"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
       />
 
