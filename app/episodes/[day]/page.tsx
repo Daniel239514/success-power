@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber } from '@/lib/dayNumber'
+import CustomAudioPlayer from '@/app/custom-audio-player'
 
 export default async function EpisodePage({
   params,
@@ -68,9 +69,7 @@ export default async function EpisodePage({
 
       <p className="mb-8 text-neutral-300">{episode.description}</p>
 
-      <audio controls src={episode.audio_url} className="mb-10 w-full">
-        Your browser does not support the audio element.
-      </audio>
+      <CustomAudioPlayer src={episode.audio_url} title={episode.title} />
 
       <blockquote className="border-l-4 border-[#c9a84c] pl-4 italic text-neutral-200">
         “{episode.key_quote}”
