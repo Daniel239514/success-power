@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 // The playback speeds the speed button cycles through, in order.
 const SPEEDS = [0.75, 1, 1.25, 1.5]
@@ -16,9 +17,13 @@ function formatTime(seconds: number) {
 export default function CustomAudioPlayer({
   src,
   title,
+  episodeId,
+  userId,
 }: {
   src: string
   title: string
+  episodeId: string
+  userId: string
 }) {
   // Whether audio is currently playing. Changing this redraws the icon.
   const [isPlaying, setIsPlaying] = useState(false)
@@ -30,11 +35,96 @@ export default function CustomAudioPlayer({
   // Current playback speed (one of SPEEDS).
   const [speed, setSpeed] = useState(1)
 
+  // The "Resuming from 2:30" note, and whether it's currently fading away.
+  const [resumeMessage, setResumeMessage] = useState<string | null>(null)
+  const [resumeFading, setResumeFading] = useState(false)
+
   // A stable handle to the real <audio> element. Changing it does NOT redraw.
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // Holds a saved position fetched from the DB until the audio is ready to be
+  // moved to it (we can't seek before the audio knows its own length).
+  const pendingSeekRef = useRef<number | null>(null)
+
+  // Create the Supabase browser client exactly once. Passing a function to
+  // useState means it runs only on the first render, not on every render.
+  const [supabase] = useState(() => createClient())
+
   // The filled percentage of the bar. Guard against dividing by zero.
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  // Save the current position to the database. "Upsert" = update the row if it
+  // already exists (matched on the user_id + episode_id primary key), or insert
+  // a new one if not. Wrapped in useCallback so it stays the same function
+  // across renders, which keeps the 5-second timer below from resetting.
+  const saveProgress = useCallback(
+    async (completed: boolean) => {
+      const audio = audioRef.current
+      if (!audio) return
+      await supabase.from('listening_progress').upsert({
+        user_id: userId,
+        episode_id: episodeId,
+        position_seconds: Math.floor(audio.currentTime),
+        completed,
+        updated_at: new Date().toISOString(),
+      })
+    },
+    [supabase, userId, episodeId],
+  )
+
+  // While playing, save progress every 5 seconds. The timer is created when
+  // playback starts and cleared when it stops (or the component unmounts).
+  useEffect(() => {
+    if (!isPlaying) return
+    const timer = setInterval(() => saveProgress(false), 5000)
+    return () => clearInterval(timer)
+  }, [isPlaying, saveProgress])
+
+  // On load, fetch this user's saved spot for this episode and resume there.
+  // Runs once (the deps are all stable). `cancelled` stops us touching state
+  // if the player unmounts before the network request comes back.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadProgress() {
+      const { data } = await supabase
+        .from('listening_progress')
+        .select('position_seconds, completed')
+        .eq('user_id', userId)
+        .eq('episode_id', episodeId)
+        .maybeSingle()
+
+      if (cancelled || !data) return
+      // A finished episode starts fresh, not at the last second.
+      if (data.completed || data.position_seconds <= 0) return
+
+      const audio = audioRef.current
+      if (audio && audio.readyState >= 1) {
+        // Audio metadata already loaded: seek now.
+        audio.currentTime = data.position_seconds
+      } else {
+        // Not ready yet: stash it for onLoadedMetadata to apply.
+        pendingSeekRef.current = data.position_seconds
+      }
+      setResumeMessage(`Resuming from ${formatTime(data.position_seconds)}`)
+    }
+
+    loadProgress()
+    return () => {
+      cancelled = true
+    }
+  }, [supabase, userId, episodeId])
+
+  // Fade the "Resuming from..." note out after 3s, then remove it from the DOM.
+  useEffect(() => {
+    if (!resumeMessage) return
+    const fadeTimer = setTimeout(() => setResumeFading(true), 3000)
+    const removeTimer = setTimeout(() => setResumeMessage(null), 3800)
+    return () => {
+      clearTimeout(fadeTimer)
+      clearTimeout(removeTimer)
+    }
+  }, [resumeMessage])
 
   // Tell the OS what's playing, so the lock screen shows the right info.
   // Re-runs whenever `title` changes (i.e. a different episode loads).
@@ -124,6 +214,11 @@ export default function CustomAudioPlayer({
 
   function handleLoadedMetadata(event: React.SyntheticEvent<HTMLAudioElement>) {
     setDuration(event.currentTarget.duration)
+    // If a saved position was waiting on the audio to be ready, apply it now.
+    if (pendingSeekRef.current != null) {
+      event.currentTarget.currentTime = pendingSeekRef.current
+      pendingSeekRef.current = null
+    }
     updatePositionState()
   }
 
@@ -145,7 +240,7 @@ export default function CustomAudioPlayer({
   }
 
   return (
-    <div className="mb-10 rounded-2xl bg-[#141414] p-6">
+    <div className="relative mb-10 rounded-2xl bg-[#141414] p-6">
       {/* The real audio engine, hidden. We control it through audioRef. */}
       <audio
         ref={audioRef}
@@ -155,7 +250,23 @@ export default function CustomAudioPlayer({
         onPause={handlePause}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => {
+          setIsPlaying(false)
+          saveProgress(true)
+        }}
       />
+
+      {/* "Resuming from 2:30" note — floats in the top padding (absolute, so it
+          never pushes the layout) and fades out a few seconds after load. */}
+      {resumeMessage && (
+        <p
+          className={`pointer-events-none absolute inset-x-0 top-2 text-center text-xs text-[#c9a84c] transition-opacity duration-700 ${
+            resumeFading ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          {resumeMessage}
+        </p>
+      )}
 
       {/* Big gold play/pause button, centered */}
       <div className="flex justify-center">
@@ -163,7 +274,7 @@ export default function CustomAudioPlayer({
           type="button"
           onClick={togglePlay}
           aria-label={isPlaying ? 'Pause' : 'Play'}
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-[#c9a84c] text-black shadow-lg transition active:scale-95"
+          className="flex h-16 w-16 touch-manipulation select-none items-center justify-center rounded-full bg-[#c9a84c] text-black shadow-lg transition active:scale-95"
         >
           {isPlaying ? (
             // Pause icon: two bars
@@ -181,7 +292,7 @@ export default function CustomAudioPlayer({
 
       {/* Seek bar */}
       <div className="mt-6">
-        <div className="relative h-4 w-full">
+        <div className="relative h-6 w-full">
           {/* Gray track, centered vertically inside the taller touch area */}
           <div className="absolute left-0 top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full bg-neutral-700">
             {/* Gold filled portion grows with progress */}
@@ -224,7 +335,7 @@ export default function CustomAudioPlayer({
           type="button"
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speed}x`}
-          className="rounded-full border border-neutral-600 px-3 py-1 text-xs font-medium text-neutral-300 transition active:scale-95"
+          className="min-w-[3.5rem] touch-manipulation select-none rounded-full border border-neutral-600 px-3 py-1 text-center text-xs font-medium tabular-nums text-neutral-300 transition active:scale-95"
         >
           {speed}×
         </button>

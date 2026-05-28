@@ -69,7 +69,12 @@ export default async function EpisodePage({
 
       <p className="mb-8 text-neutral-300">{episode.description}</p>
 
-      <CustomAudioPlayer src={episode.audio_url} title={episode.title} />
+      <CustomAudioPlayer
+        src={episode.audio_url}
+        title={episode.title}
+        episodeId={episode.id}
+        userId={user.id}
+      />
 
       <blockquote className="border-l-4 border-[#c9a84c] pl-4 italic text-neutral-200">
         “{episode.key_quote}”
