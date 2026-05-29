@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
+import { getEpisodeForDay } from '@/lib/episodes'
 import { logout } from './logout/actions'
 
 export default async function Home() {
@@ -49,11 +50,7 @@ export default async function Home() {
     ? calculateDayNumber(profile.subscription_start_date)
     : 1
 
-  const { data: todayEpisode } = await supabase
-    .from('episodes')
-    .select('*')
-    .eq('day_number', currentDay)
-    .single()
+  const todayEpisode = await getEpisodeForDay(currentDay)
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 bg-[#0a0a0a] px-6 pb-24 pt-12">
