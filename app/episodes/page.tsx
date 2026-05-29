@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
@@ -28,7 +29,8 @@ export default async function EpisodesPage() {
     )
   }
 
-  const dayNumber = calculateDayNumber(profile.subscription_start_date)
+  const tz = (await cookies()).get('tz')?.value
+  const dayNumber = calculateDayNumber(profile.subscription_start_date, tz)
 
   const { data: episodes, error } = await supabase
     .from('episodes')

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
@@ -46,8 +47,9 @@ export default async function Home() {
   const isSubscriber = profile?.subscription_status === 'active'
   const planLabel = profile?.subscription_plan === 'annual' ? 'Annual' : 'Monthly'
 
+  const tz = (await cookies()).get('tz')?.value
   const currentDay = profile
-    ? calculateDayNumber(profile.subscription_start_date)
+    ? calculateDayNumber(profile.subscription_start_date, tz)
     : 1
 
   const todayEpisode = await getEpisodeForDay(currentDay)

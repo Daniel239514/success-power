@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber } from '@/lib/dayNumber'
@@ -36,7 +37,8 @@ export default async function EpisodePage({
     redirect('/episodes')
   }
 
-  const currentDay = calculateDayNumber(profile.subscription_start_date)
+  const tz = (await cookies()).get('tz')?.value
+  const currentDay = calculateDayNumber(profile.subscription_start_date, tz)
 
   if (requestedDay > currentDay) {
     redirect('/episodes')
