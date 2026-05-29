@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createClient } from '@/lib/supabase/server'
 
 // Map the plan name the browser sends to the real Price ID (kept server-side
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin') ?? new URL(request.url).origin
 
   // 4. Create the Checkout Session.
+  const stripe = getStripe()
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],

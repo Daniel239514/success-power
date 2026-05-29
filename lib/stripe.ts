@@ -1,5 +1,12 @@
 import Stripe from 'stripe'
 
-// One shared Stripe client, created from our SECRET key (server-only).
-// Imported by the checkout endpoint and the webhook.
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+let stripeClient: Stripe | null = null
+
+// Created on first use (not at import time), so the production build never
+// needs STRIPE_SECRET_KEY — only live requests do.
+export function getStripe(): Stripe {
+  if (!stripeClient) {
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+  }
+  return stripeClient
+}

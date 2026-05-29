@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Stripe + the service-role Supabase client both need Node APIs, so force the
@@ -10,6 +10,8 @@ export const runtime = 'nodejs'
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe()
+
   // 1. Read the RAW body — the exact bytes Stripe sent. We must NOT parse it to
   //    JSON first: the signature is computed over these exact bytes, so any
   //    reformatting (spaces, key order) would break verification.
