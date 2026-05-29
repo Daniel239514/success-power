@@ -30,24 +30,32 @@ export async function POST(request: NextRequest) {
   // 3. Where Stripe should send the browser back to (works locally and on Vercel).
   const origin = request.headers.get('origin') ?? new URL(request.url).origin
 
-  // 4. Create the Checkout Session.
+  // 4. Create the Checkout Session. Wrapped so a Stripe failure returns a
+  //    readable JSON error instead of an empty 500 (which the browser can't
+  //    parse — that's the "Unexpected end of JSON input" message).
   const stripe = getStripe()
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
-    customer_email: user.email,
-    success_url: `${origin}/subscribe/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/subscribe/cancelled`,
-    // metadata = our own private note attached to this payment. The webhook
-    // reads it back to know WHICH Supabase user just paid.
-    metadata: { supabase_user_id: user.id, plan },
-    // Copy the same note onto the Subscription object, so the cancellation
-    // webhook can identify the user too.
-    subscription_data: {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      customer_email: user.email,
+      success_url: `${origin}/subscribe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/subscribe/cancelled`,
+      // metadata = our own private note attached to this payment. The webhook
+      // reads it back to know WHICH Supabase user just paid.
       metadata: { supabase_user_id: user.id, plan },
-    },
-  })
+      // Copy the same note onto the Subscription object, so the cancellation
+      // webhook can identify the user too.
+      subscription_data: {
+        metadata: { supabase_user_id: user.id, plan },
+      },
+    })
 
-  // 5. Hand the hosted-checkout URL back to the browser to redirect to.
-  return NextResponse.json({ url: session.url })
+    // 5. Hand the hosted-checkout URL back to the browser to redirect to.
+    return NextResponse.json({ url: session.url })
+  } catch (err) {
+    console.error('❌ Checkout session creation failed:', err)
+    const message = err instanceof Error ? err.message : 'Could not start checkout.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
