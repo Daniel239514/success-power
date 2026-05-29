@@ -186,6 +186,18 @@ export default function CustomAudioPlayer({
     }
   }
 
+  // Jump the given number of seconds (negative = back), clamped to the track.
+  function skip(seconds: number) {
+    const audio = audioRef.current
+    if (!audio) return
+    const max = Number.isFinite(audio.duration)
+      ? audio.duration
+      : audio.currentTime + seconds
+    audio.currentTime = Math.min(Math.max(audio.currentTime + seconds, 0), max)
+    setCurrentTime(audio.currentTime)
+    updatePositionState()
+  }
+
   // Tell the OS how long the track is, where we are, and the speed. This is
   // what makes the lock-screen scrubber accurate and the remote play/pause
   // reliable (especially on iOS, which otherwise freezes a paused page).
@@ -268,8 +280,32 @@ export default function CustomAudioPlayer({
         </p>
       )}
 
-      {/* Big gold play/pause button, centered */}
-      <div className="flex justify-center">
+      {/* Skip-back 10s · play/pause · skip-forward 10s, centered as a row */}
+      <div className="flex items-center justify-center gap-6">
+        <button
+          type="button"
+          onClick={() => skip(-10)}
+          aria-label="Skip back 10 seconds"
+          className="relative flex h-12 w-12 touch-manipulation select-none items-center justify-center text-neutral-300 transition active:scale-95"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-9 w-9"
+          >
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </svg>
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-bold tabular-nums">
+            10
+          </span>
+        </button>
+
+        {/* Big gold play/pause button */}
         <button
           type="button"
           onClick={togglePlay}
@@ -287,6 +323,29 @@ export default function CustomAudioPlayer({
               <path d="M8 5v14l11-7z" />
             </svg>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => skip(10)}
+          aria-label="Skip forward 10 seconds"
+          className="relative flex h-12 w-12 touch-manipulation select-none items-center justify-center text-neutral-300 transition active:scale-95"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-9 w-9"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-bold tabular-nums">
+            10
+          </span>
         </button>
       </div>
 
