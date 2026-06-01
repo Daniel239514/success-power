@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
 import FreePlanBanner from './free-plan-banner'
+import EnableNotifications from './enable-notifications'
+import SendTestButton from './send-test-button'
 import { logout } from './logout/actions'
 
 export default async function Home() {
@@ -108,6 +110,10 @@ export default async function Home() {
       ) : (
         <p className="text-neutral-400">No episode available for today yet.</p>
       )}
+
+      <EnableNotifications />
+
+      <SendTestButton />
 
       <form action={logout}>
         <button
