@@ -3,7 +3,9 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber } from '@/lib/dayNumber'
+import { canPlayEpisode } from '@/lib/access'
 import CustomAudioPlayer from '@/app/custom-audio-player'
+import Paywall from '@/app/paywall'
 
 export default async function EpisodePage({
   params,
@@ -29,7 +31,7 @@ export default async function EpisodePage({
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('subscription_start_date')
+    .select('subscription_start_date, subscription_status')
     .eq('id', user.id)
     .single()
 
@@ -54,6 +56,12 @@ export default async function EpisodePage({
     notFound()
   }
 
+  // Day-lock (requestedDay > currentDay) was already handled above with a
+  // redirect, so a `false` here can only mean the subscription rule: a free
+  // user trying to play Day 2+. In that case we render the paywall and never
+  // send the audio URL to the browser.
+  const canPlay = canPlayEpisode(profile, episode, currentDay)
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-6 pb-24 pt-10 text-white">
       <Link
@@ -71,16 +79,22 @@ export default async function EpisodePage({
 
       <p className="mb-8 text-neutral-300">{episode.description}</p>
 
-      <CustomAudioPlayer
-        src={episode.audio_url}
-        title={episode.title}
-        episodeId={episode.id}
-        userId={user.id}
-      />
+      {canPlay ? (
+        <>
+          <CustomAudioPlayer
+            src={episode.audio_url}
+            title={episode.title}
+            episodeId={episode.id}
+            userId={user.id}
+          />
 
-      <blockquote className="border-l-4 border-[#c9a84c] pl-4 italic text-neutral-200">
-        “{episode.key_quote}”
-      </blockquote>
+          <blockquote className="border-l-4 border-[#c9a84c] pl-4 italic text-neutral-200">
+            “{episode.key_quote}”
+          </blockquote>
+        </>
+      ) : (
+        <Paywall />
+      )}
     </main>
   )
 }

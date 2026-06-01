@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
+import { canPlayEpisode } from '@/lib/access'
 
 export default async function EpisodesPage() {
   const supabase = await createClient()
@@ -17,7 +18,7 @@ export default async function EpisodesPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('subscription_start_date')
+    .select('subscription_start_date, subscription_status')
     .eq('id', user.id)
     .single()
 
@@ -58,6 +59,7 @@ export default async function EpisodesPage() {
           const isToday = ep.day_number === dayNumber
           const isLocked = ep.day_number > dayNumber
 
+          // Day-locked future episodes: the existing greyed-out lock (Slice 5).
           if (isLocked) {
             return (
               <li key={ep.id}>
@@ -76,6 +78,33 @@ export default async function EpisodesPage() {
                   </div>
                   <p className="text-sm text-neutral-600">{ep.description}</p>
                 </div>
+              </li>
+            )
+          }
+
+          // Day-unlocked but blocked by subscription (free user, Day 2+). Still
+          // a tappable link — tapping it lands on the paywall on the episode page.
+          if (!canPlayEpisode(profile, ep, dayNumber)) {
+            return (
+              <li key={ep.id}>
+                <Link
+                  href={`/episodes/${ep.day_number}`}
+                  className="block rounded-xl border border-neutral-800 bg-neutral-900 p-5 transition hover:border-[#c9a84c]"
+                >
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className="rounded-full bg-neutral-800 px-3 py-1 text-xs font-bold text-neutral-400">
+                      DAY {ep.day_number}
+                    </span>
+                    <h2 className="text-lg font-semibold text-neutral-300">{ep.title}</h2>
+                    <span className="ml-auto text-lg" aria-label="locked">
+                      🔒
+                    </span>
+                  </div>
+                  <p className="text-sm text-neutral-500">{ep.description}</p>
+                  <span className="mt-3 inline-block text-sm font-semibold text-[#c9a84c]">
+                    Subscribe to unlock →
+                  </span>
+                </Link>
               </li>
             )
           }

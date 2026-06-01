@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { createClient } from "@/lib/supabase/server";
 import BottomNav from "./bottom-nav";
 import SwRegister from "./sw-register";
 import TimezoneSync from "./timezone-sync";
@@ -34,11 +35,30 @@ export const viewport: Viewport = {
   themeColor: "#c9a84c",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Decide whether the bottom nav should show a "Subscribe" tab. Only a
+  // logged-in free user needs it — subscribers and logged-out visitors don't.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let isSubscriber = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("subscription_status")
+      .eq("id", user.id)
+      .single();
+    isSubscriber = profile?.subscription_status === "active";
+  }
+
+  const showSubscribe = Boolean(user) && !isSubscriber;
+
   return (
     <html
       lang="en"
@@ -46,7 +66,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <BottomNav />
+        <BottomNav showSubscribe={showSubscribe} />
         <SwRegister />
         <TimezoneSync />
       </body>

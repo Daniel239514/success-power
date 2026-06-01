@@ -3,13 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const tabs = [
-  { href: '/', label: 'Home' },
-  { href: '/episodes', label: 'Episodes' },
-]
-
-export default function BottomNav() {
+export default function BottomNav({ showSubscribe }: { showSubscribe: boolean }) {
   const pathname = usePathname()
+
+  const tabs = [
+    { href: '/', label: 'Home' },
+    { href: '/episodes', label: 'Episodes' },
+    // Free users get an extra tab to upgrade; subscribers never see it.
+    ...(showSubscribe ? [{ href: '/subscribe', label: 'Subscribe' }] : []),
+  ]
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/'

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
+import FreePlanBanner from './free-plan-banner'
 import { logout } from './logout/actions'
 
 export default async function Home() {
@@ -56,6 +57,8 @@ export default async function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 bg-[#0a0a0a] px-6 pb-24 pt-12">
+      {!isSubscriber && <FreePlanBanner />}
+
       <h1 className="text-center text-4xl font-bold tracking-tight text-[#c9a84c] sm:text-5xl">
         Success Power
       </h1>
