@@ -16,6 +16,24 @@ export function currentHourInZone(timeZone: string | null | undefined): number |
   }
 }
 
+// The calendar date (YYYY-MM-DD) of a given instant, as seen in a time zone.
+// e.g. a UTC timestamp of 2026-06-01T23:30Z is "2026-06-02" in Africa/Lagos.
+// Used to ask "did this happen today in the user's zone?". Falls back to UTC.
+export function dateInZone(date: Date, timeZone: string | null | undefined): string {
+  const fmt = (tz: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
+  try {
+    return fmt(timeZone || 'UTC')
+  } catch {
+    return fmt('UTC')
+  }
+}
+
 // Validate that a string is a real IANA time zone (used before saving to the DB).
 export function isValidTimeZone(timeZone: string): boolean {
   try {
