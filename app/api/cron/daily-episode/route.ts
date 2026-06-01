@@ -30,17 +30,18 @@ export async function GET(request: NextRequest) {
   // 2. Get everyone who could receive a notification.
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, timezone, subscription_start_date')
+    .select('id, timezone, subscription_start_date, notify_daily')
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // 3. Keep only users for whom it's currently the send hour (6 AM their time)
-  //    and who have a start date to compute a day number from.
+  // 3. Keep only users for whom it's currently the send hour (6 AM their time),
+  //    who have a start date, and who haven't switched daily alerts off.
   const dueUsers = (profiles ?? []).filter(
     (p) =>
       p.subscription_start_date &&
+      p.notify_daily !== false &&
       currentHourInZone(p.timezone) === sendHour,
   )
 

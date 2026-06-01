@@ -115,6 +115,13 @@ export default async function Home() {
 
       <SendTestButton />
 
+      <Link
+        href="/settings"
+        className="text-sm text-neutral-400 underline-offset-4 transition hover:text-[#c9a84c] hover:underline"
+      >
+        Notification settings
+      </Link>
+
       <form action={logout}>
         <button
           type="submit"

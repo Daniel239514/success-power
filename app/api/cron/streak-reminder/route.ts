@@ -24,16 +24,19 @@ export async function GET(request: NextRequest) {
   // Everyone who could get a reminder.
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, timezone, subscription_start_date')
+    .select('id, timezone, subscription_start_date, notify_streak')
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Users for whom it's currently 8 PM (their time) with a start date.
+  // Users for whom it's currently 8 PM (their time), with a start date, who
+  // haven't switched streak reminders off.
   const dueUsers = (profiles ?? []).filter(
     (p) =>
-      p.subscription_start_date && currentHourInZone(p.timezone) === sendHour,
+      p.subscription_start_date &&
+      p.notify_streak !== false &&
+      currentHourInZone(p.timezone) === sendHour,
   )
 
   if (dueUsers.length === 0) {
