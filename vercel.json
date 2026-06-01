@@ -3,6 +3,10 @@
     {
       "path": "/",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-episode",
+      "schedule": "0 * * * *"
     }
   ]
 }
