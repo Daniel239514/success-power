@@ -11,6 +11,7 @@ export type SubscriberRow = {
 }
 
 type Filter = 'all' | 'active' | 'free'
+type Region = 'all' | 'nigerian' | 'international'
 const PAGE_SIZE = 20
 
 function formatDate(iso: string) {
@@ -19,6 +20,14 @@ function formatDate(iso: string) {
     month: 'short',
     day: 'numeric',
   })
+}
+
+// The processor is encoded in the plan name: the _ngn suffix means Paystack
+// (Nigerian), any other non-null plan means Stripe (international), and no plan
+// means a free user who never paid through either.
+function processorOf(plan: string | null): 'Paystack' | 'Stripe' | null {
+  if (!plan) return null
+  return plan.endsWith('_ngn') ? 'Paystack' : 'Stripe'
 }
 
 // Wrap a value so it's safe inside a CSV cell: if it contains a comma, quote,
@@ -31,20 +40,24 @@ function csvCell(value: string) {
 export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [region, setRegion] = useState<Region>('all')
   const [page, setPage] = useState(0)
 
-  // Apply the status filter and the email search. Recomputed only when the
-  // inputs change.
+  // Apply the status filter, the region (processor) filter, and the email
+  // search. Recomputed only when the inputs change.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter((r) => {
       const isActive = r.status === 'active'
       if (filter === 'active' && !isActive) return false
       if (filter === 'free' && isActive) return false
+      const proc = processorOf(r.plan)
+      if (region === 'nigerian' && proc !== 'Paystack') return false
+      if (region === 'international' && proc !== 'Stripe') return false
       if (q && !r.email.toLowerCase().includes(q)) return false
       return true
     })
-  }, [rows, search, filter])
+  }, [rows, search, filter, region])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
@@ -56,13 +69,14 @@ export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
   // Build a CSV from the CURRENTLY FILTERED list (not just this page) and
   // trigger a download — entirely in the browser, no server round-trip.
   function exportCsv() {
-    const header = ['Email', 'Signup date', 'Plan', 'Status']
+    const header = ['Email', 'Signup date', 'Plan', 'Processor', 'Status']
     const lines = [
       header,
       ...filtered.map((r) => [
         r.email,
         formatDate(r.signupDate),
         r.plan ?? '',
+        processorOf(r.plan) ?? '',
         r.status ?? 'free',
       ]),
     ]
@@ -81,6 +95,11 @@ export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
 
   function changeFilter(next: Filter) {
     setFilter(next)
+    setPage(0)
+  }
+
+  function changeRegion(next: Region) {
+    setRegion(next)
     setPage(0)
   }
 
@@ -123,6 +142,22 @@ export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
             </button>
           ))}
         </div>
+        {/* Region filter = which processor a subscriber came through. */}
+        <div className="flex gap-1">
+          {(['all', 'nigerian', 'international'] as Region[]).map((r) => (
+            <button
+              key={r}
+              onClick={() => changeRegion(r)}
+              className={`rounded-md px-3 py-2 text-sm font-medium capitalize transition ${
+                region === r
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
         <span className="text-sm text-slate-500">
           {filtered.length} {filtered.length === 1 ? 'person' : 'people'}
         </span>
@@ -136,13 +171,14 @@ export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Signed up</th>
               <th className="px-4 py-3 font-medium">Plan</th>
+              <th className="px-4 py-3 font-medium">Processor</th>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                   No subscribers match.
                 </td>
               </tr>
@@ -154,6 +190,21 @@ export default function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
                     {formatDate(r.signupDate)}
                   </td>
                   <td className="px-4 py-3 capitalize">{r.plan ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    {processorOf(r.plan) ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          processorOf(r.plan) === 'Paystack'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-indigo-100 text-indigo-700'
+                        }`}
+                      >
+                        {processorOf(r.plan)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {r.status === 'active' ? (
                       <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">

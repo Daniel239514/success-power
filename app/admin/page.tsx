@@ -7,10 +7,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // Always fetch fresh numbers — never serve a stale cached dashboard.
 export const dynamic = 'force-dynamic'
 
-// Plan pricing, in US dollars. Annual is billed once a year, so its monthly
-// contribution to MRR (Monthly Recurring Revenue) is the yearly price / 12.
+// Plan pricing. Annual is billed once a year, so its monthly contribution to
+// MRR (Monthly Recurring Revenue) is the yearly price / 12.
+//   Stripe ($)  : monthly $7,    annual $63   -> $5.25/mo
+//   Paystack (₦): monthly ₦2,000, annual ₦18,000 -> ₦1,500/mo
 const MONTHLY_PRICE = 7
 const ANNUAL_PRICE_PER_MONTH = 63 / 12 // $5.25
+const MONTHLY_PRICE_NGN = 2000
+const ANNUAL_PRICE_PER_MONTH_NGN = 18000 / 12 // ₦1,500
 
 export default async function AdminDashboardPage() {
   const supabase = createAdminClient()
@@ -23,6 +27,8 @@ export default async function AdminDashboardPage() {
     paidRes,
     monthlyRes,
     annualRes,
+    monthlyNgnRes,
+    annualNgnRes,
     episodesRes,
     signupsRes,
   ] = await Promise.all([
@@ -33,18 +39,30 @@ export default async function AdminDashboardPage() {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('subscription_status', 'active'),
-    // Active monthly plans (for MRR).
+    // Active Stripe monthly plans (for USD MRR).
     supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('subscription_status', 'active')
       .eq('subscription_plan', 'monthly'),
-    // Active annual plans (for MRR).
+    // Active Stripe annual plans (for USD MRR).
     supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('subscription_status', 'active')
       .eq('subscription_plan', 'annual'),
+    // Active Paystack monthly plans (for ₦ MRR).
+    supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('subscription_status', 'active')
+      .eq('subscription_plan', 'monthly_ngn'),
+    // Active Paystack annual plans (for ₦ MRR).
+    supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('subscription_status', 'active')
+      .eq('subscription_plan', 'annual_ngn'),
     // Episodes published = episodes uploaded (rows that exist).
     supabase.from('episodes').select('*', { count: 'exact', head: true }),
     // Recent signups: pull users from the auth system (that's where email and
@@ -56,9 +74,14 @@ export default async function AdminDashboardPage() {
   const paidSubscribers = paidRes.count ?? 0
   const monthlyCount = monthlyRes.count ?? 0
   const annualCount = annualRes.count ?? 0
+  const monthlyNgnCount = monthlyNgnRes.count ?? 0
+  const annualNgnCount = annualNgnRes.count ?? 0
   const episodesPublished = episodesRes.count ?? 0
 
-  const mrr = monthlyCount * MONTHLY_PRICE + annualCount * ANNUAL_PRICE_PER_MONTH
+  // Two separate MRRs — we never convert between currencies, just report each.
+  const mrrUsd = monthlyCount * MONTHLY_PRICE + annualCount * ANNUAL_PRICE_PER_MONTH
+  const mrrNgn =
+    monthlyNgnCount * MONTHLY_PRICE_NGN + annualNgnCount * ANNUAL_PRICE_PER_MONTH_NGN
 
   // auth.admin.listUsers doesn't guarantee an order, so sort newest-first
   // ourselves, then take 10.
@@ -74,15 +97,21 @@ export default async function AdminDashboardPage() {
     <div>
       <h1 className="text-2xl font-bold">Dashboard</h1>
 
-      {/* Four metric cards. They stack on phones and sit in a row on desktop. */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Metric cards. They stack on phones and sit in a row on desktop. The two
+          MRR figures stay separate — Stripe earns $, Paystack earns ₦, and we
+          never fake an exchange rate between them. */}
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard label="Total subscribers" value={totalSubscribers.toLocaleString()} />
         <MetricCard label="Paid subscribers" value={paidSubscribers.toLocaleString()} />
-        <MetricCard
-          label="MRR (monthly revenue)"
-          value={`$${Math.round(mrr).toLocaleString()}`}
-        />
         <MetricCard label="Episodes published" value={episodesPublished.toLocaleString()} />
+        <MetricCard
+          label="MRR · International (Stripe)"
+          value={`$${Math.round(mrrUsd).toLocaleString()}`}
+        />
+        <MetricCard
+          label="MRR · Nigeria (Paystack)"
+          value={`₦${Math.round(mrrNgn).toLocaleString()}`}
+        />
       </div>
 
       {/* Recent signups table. */}

@@ -6,6 +6,7 @@ import { calculateDayNumber } from '@/lib/dayNumber'
 import { canPlayEpisode } from '@/lib/access'
 import CustomAudioPlayer from '@/app/custom-audio-player'
 import Paywall from '@/app/paywall'
+import { getPaywallConfig } from '@/lib/paywall-config'
 
 export default async function EpisodePage({
   params,
@@ -62,6 +63,10 @@ export default async function EpisodePage({
   // send the audio URL to the browser.
   const canPlay = canPlayEpisode(profile, episode, currentDay)
 
+  // Only resolve the geo/processor config when we're actually going to show the
+  // paywall — paying users skip the lookup entirely.
+  const paywallConfig = canPlay ? null : await getPaywallConfig()
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-6 pb-24 pt-10 text-white">
       <Link
@@ -93,7 +98,7 @@ export default async function EpisodePage({
           </blockquote>
         </>
       ) : (
-        <Paywall />
+        <Paywall config={paywallConfig!} />
       )}
     </main>
   )
