@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendToSubscription, type SubscriptionRow } from '@/lib/push'
 import { currentHourInZone, dateInZone } from '@/lib/timezone'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
+import { getAppSettings } from '@/lib/settings'
 
 // The local hour at which we nudge people who haven't listened yet.
 const SEND_HOUR = 20 // 8 PM
@@ -18,6 +19,12 @@ export async function GET(request: NextRequest) {
   const hourParam = request.nextUrl.searchParams.get('hour')
   const sendHour =
     hourParam !== null && /^\d{1,2}$/.test(hourParam) ? Number(hourParam) : SEND_HOUR
+
+  // Respect the global on/off switch from the admin Settings page.
+  const settings = await getAppSettings()
+  if (!settings.notify_streak_enabled) {
+    return NextResponse.json({ due: 0, reminded: 0, disabled: true })
+  }
 
   const supabase = createAdminClient()
 

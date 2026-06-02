@@ -4,6 +4,7 @@ import { sendToSubscription, type SubscriptionRow } from '@/lib/push'
 import { currentHourInZone } from '@/lib/timezone'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
+import { getAppSettings } from '@/lib/settings'
 
 // The hour (local to each user) at which we send the "new episode" push.
 const SEND_HOUR = 6
@@ -24,6 +25,13 @@ export async function GET(request: NextRequest) {
   const hourParam = request.nextUrl.searchParams.get('hour')
   const sendHour =
     hourParam !== null && /^\d{1,2}$/.test(hourParam) ? Number(hourParam) : SEND_HOUR
+
+  // Respect the global on/off switch from the admin Settings page. If daily
+  // notifications are turned off, stop here without sending anything.
+  const settings = await getAppSettings()
+  if (!settings.notify_daily_enabled) {
+    return NextResponse.json({ due: 0, sent: 0, disabled: true })
+  }
 
   const supabase = createAdminClient()
 

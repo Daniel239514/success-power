@@ -6,6 +6,9 @@ import { usePathname } from 'next/navigation'
 export default function BottomNav({ showSubscribe }: { showSubscribe: boolean }) {
   const pathname = usePathname()
 
+  // The admin area has its own navigation, so hide the consumer bottom nav there.
+  if (pathname.startsWith('/admin')) return null
+
   const tabs = [
     { href: '/', label: 'Home' },
     { href: '/episodes', label: 'Episodes' },
