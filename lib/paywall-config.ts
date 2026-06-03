@@ -4,7 +4,7 @@ import type { PaywallConfig } from '@/app/paywall'
 // Stripe for the world, Paystack for Nigeria. Both pages that show the paywall
 // (/subscribe and the locked episode page) resolve their config through here so
 // the routing rule lives in exactly one place.
-const STRIPE_CONFIG: PaywallConfig = {
+export const STRIPE_CONFIG: PaywallConfig = {
   processor: 'stripe',
   checkoutUrl: '/api/checkout',
   monthly: { price: '$7', per: '/month' },
@@ -12,7 +12,7 @@ const STRIPE_CONFIG: PaywallConfig = {
   footer: 'Cancel anytime. Secure payment via Stripe.',
 }
 
-const PAYSTACK_CONFIG: PaywallConfig = {
+export const PAYSTACK_CONFIG: PaywallConfig = {
   processor: 'paystack',
   checkoutUrl: '/api/paystack/checkout',
   monthly: { price: '₦2,000', per: '/month' },
@@ -26,4 +26,17 @@ export async function getPaywallConfig(
 ): Promise<PaywallConfig> {
   const country = await getCountry(override)
   return country === 'NG' ? PAYSTACK_CONFIG : STRIPE_CONFIG
+}
+
+// For the subscribe page, where the user may CHOOSE their currency. `primary`
+// is the geo-default (what's pre-selected); `alt` is the other option offered
+// behind the currency toggle. Both processors work regardless of location —
+// geo only decides which is shown first.
+export async function getSubscribeConfigs(
+  override?: string | null,
+): Promise<{ primary: PaywallConfig; alt: PaywallConfig }> {
+  const country = await getCountry(override)
+  return country === 'NG'
+    ? { primary: PAYSTACK_CONFIG, alt: STRIPE_CONFIG }
+    : { primary: STRIPE_CONFIG, alt: PAYSTACK_CONFIG }
 }

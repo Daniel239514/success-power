@@ -21,11 +21,33 @@ const PERKS = [
   'Cancel anytime',
 ]
 
-export default function Paywall({ config }: { config: PaywallConfig }) {
+// A short currency label per processor, for the toggle buttons.
+function currencyLabel(processor: 'stripe' | 'paystack'): string {
+  return processor === 'paystack' ? '₦ Naira' : '$ USD'
+}
+
+export default function Paywall({
+  config,
+  altConfig,
+}: {
+  config: PaywallConfig
+  // When provided (subscribe page), the user can switch currency/processor.
+  // When omitted (locked-episode paywall), a single currency shows as before.
+  altConfig?: PaywallConfig
+}) {
   // Annual is selected by default — it's the plan we most want people to pick.
   const [selected, setSelected] = useState<Plan>('annual')
+  // Which processor the user picked. Defaults to the geo config passed in.
+  const [processor, setProcessor] = useState<'stripe' | 'paystack'>(
+    config.processor,
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // The active config is whichever processor is selected. With no altConfig
+  // there's only one, so it's always `config`.
+  const active =
+    altConfig && processor === altConfig.processor ? altConfig : config
 
   async function subscribe() {
     setLoading(true)
@@ -35,7 +57,7 @@ export default function Paywall({ config }: { config: PaywallConfig }) {
       // Both return { url } and we redirect the same way; only the endpoint and
       // the response field differ (Stripe: Checkout Session URL, Paystack:
       // authorization_url, which we normalise to `url` on the server).
-      const res = await fetch(config.checkoutUrl, {
+      const res = await fetch(active.checkoutUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: selected }),
@@ -77,20 +99,45 @@ export default function Paywall({ config }: { config: PaywallConfig }) {
         ))}
       </ul>
 
-      <div className="mt-8 grid w-full grid-cols-2 gap-3">
+      {/* Currency toggle — only shown when an alternative is offered. */}
+      {altConfig && (
+        <div className="mt-8 grid w-full grid-cols-2 gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-1">
+          {[config, altConfig].map((c) => {
+            const isActive = active.processor === c.processor
+            return (
+              <button
+                key={c.processor}
+                type="button"
+                onClick={() => setProcessor(c.processor)}
+                aria-pressed={isActive}
+                className={
+                  'rounded-md py-2 text-sm font-semibold transition ' +
+                  (isActive
+                    ? 'bg-[#c9a84c] text-black'
+                    : 'text-neutral-400 hover:text-white')
+                }
+              >
+                {currencyLabel(c.processor)}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <div className={`${altConfig ? 'mt-4' : 'mt-8'} grid w-full grid-cols-2 gap-3`}>
         <PlanCard
           label="Monthly"
-          price={config.monthly.price}
-          per={config.monthly.per}
-          badge={config.monthly.badge}
+          price={active.monthly.price}
+          per={active.monthly.per}
+          badge={active.monthly.badge}
           selected={selected === 'monthly'}
           onSelect={() => setSelected('monthly')}
         />
         <PlanCard
           label="Annual"
-          price={config.annual.price}
-          per={config.annual.per}
-          badge={config.annual.badge}
+          price={active.annual.price}
+          per={active.annual.per}
+          badge={active.annual.badge}
           selected={selected === 'annual'}
           onSelect={() => setSelected('annual')}
         />
@@ -106,7 +153,7 @@ export default function Paywall({ config }: { config: PaywallConfig }) {
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-      <p className="mt-4 text-xs text-neutral-500">{config.footer}</p>
+      <p className="mt-4 text-xs text-neutral-500">{active.footer}</p>
     </section>
   )
 }
