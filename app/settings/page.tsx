@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   // missing, matching the database default.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('notify_daily, notify_streak')
+    .select('notify_daily, notify_streak, notify_masterclass')
     .eq('id', user.id)
     .single()
 
@@ -40,6 +40,7 @@ export default async function SettingsPage() {
           userId={user.id}
           initialDaily={profile?.notify_daily ?? true}
           initialStreak={profile?.notify_streak ?? true}
+          initialMasterclass={profile?.notify_masterclass ?? true}
         />
       </section>
     </main>

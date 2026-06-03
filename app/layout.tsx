@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { hasSubscriberAccess } from "@/lib/access";
+import { getInitials } from "@/lib/initials";
 import BottomNav from "./bottom-nav";
 import SwRegister from "./sw-register";
 import TimezoneSync from "./timezone-sync";
@@ -49,13 +50,15 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   let isSubscriber = false;
+  let profileInitials: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("subscription_status, current_period_end")
+      .select("subscription_status, current_period_end, full_name")
       .eq("id", user.id)
       .single();
     isSubscriber = hasSubscriberAccess(profile);
+    profileInitials = getInitials(profile?.full_name ?? "", user.email ?? "");
   }
 
   const showSubscribe = Boolean(user) && !isSubscriber;
@@ -67,7 +70,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <BottomNav showSubscribe={showSubscribe} />
+        <BottomNav showSubscribe={showSubscribe} profileInitials={profileInitials} />
         <SwRegister />
         <TimezoneSync />
       </body>

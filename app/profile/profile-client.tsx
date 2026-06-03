@@ -1,11 +1,40 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import NotificationSettings from '@/app/notification-settings'
+import { logout } from '@/app/logout/actions'
+import { getInitials } from '@/lib/initials'
+
+// A curated list of common IANA zones for the dropdown. The user's actual saved
+// or browser-detected zone is merged in at render time, so this list never has
+// to be exhaustive — it just covers the likely choices.
+const COMMON_TIMEZONES = [
+  'Africa/Lagos',
+  'Africa/Accra',
+  'Africa/Nairobi',
+  'Africa/Johannesburg',
+  'Africa/Cairo',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Sao_Paulo',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'UTC',
+]
 
 // Everything the Profile screen needs, loaded once on the server and passed
 // down. As we build Steps B–K this component grows the edit field,
 // subscription card, toggles, timezone picker and sign-out.
 export type ProfileProps = {
+  userId: string
   email: string
   fullName: string
   subscriptionStatus: string
@@ -14,21 +43,9 @@ export type ProfileProps = {
   stripeCustomerId: string | null
   paystackCustomerCode: string | null
   timezone: string | null
-}
-
-// Initials for the avatar: first letter of first name + first letter of last
-// name. If the name is empty (or a single word), fall back gracefully so the
-// circle is never blank.
-function getInitials(fullName: string, email: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  }
-  if (parts.length === 1) {
-    return parts[0][0].toUpperCase()
-  }
-  // No name yet -> use the email's first character.
-  return (email[0] ?? '?').toUpperCase()
+  notifyDaily: boolean
+  notifyStreak: boolean
+  notifyMasterclass: boolean
 }
 
 // "annual" -> "Annual", "monthly" -> "Monthly", anything else -> "Free".
@@ -76,6 +93,66 @@ export default function ProfileClient(props: ProfileProps) {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
+
+  // Timezone: start from the saved value. If blank, fill in the browser's
+  // detected zone AFTER mount (in an effect, never during render) so server
+  // and client agree — then save it so the cron has it.
+  const [tz, setTz] = useState(props.timezone ?? '')
+  const [tzStatus, setTzStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  )
+
+  // Delete-account flow.
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function confirmDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch('/api/profile/delete', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Delete failed')
+      // Full reload to home — the session is gone, so the public landing shows.
+      window.location.href = '/'
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
+      setDeleting(false)
+    }
+  }
+
+  async function saveTimezone(value: string) {
+    setTz(value)
+    setTzStatus('saving')
+    try {
+      const res = await fetch('/api/profile/timezone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: value }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      setTzStatus('saved')
+      setTimeout(() => setTzStatus('idle'), 2000)
+    } catch {
+      setTzStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    if (!props.timezone) {
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (detected) saveTimezone(detected)
+    }
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Build the dropdown options: common zones plus the user's current zone, in
+  // case it isn't in the common list. Deduped, stable order.
+  const tzOptions = Array.from(
+    new Set([...(tz ? [tz] : []), ...COMMON_TIMEZONES]),
+  )
 
   // The name lives in state so the header (initials + name) updates the moment
   // the user saves, without a page reload. `savedName` is what's persisted;
@@ -271,6 +348,75 @@ export default function ProfileClient(props: ProfileProps) {
             </div>
           </div>
         </section>
+
+        {/* ── Notifications ────────────────────────────────────────── */}
+        <section className="mt-10">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-neutral-500">
+            Notifications
+          </h2>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-5">
+            <NotificationSettings
+              userId={props.userId}
+              initialDaily={props.notifyDaily}
+              initialStreak={props.notifyStreak}
+              initialMasterclass={props.notifyMasterclass}
+            />
+          </div>
+        </section>
+
+        {/* ── Timezone ─────────────────────────────────────────────── */}
+        <section className="mt-10">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-neutral-500">
+            Timezone
+          </h2>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <p className="mb-3 text-sm text-neutral-400">
+              Used to send your daily reminder at 6 AM your time.
+            </p>
+            <div className="flex items-center gap-3">
+              <select
+                value={tz}
+                onChange={(e) => saveTimezone(e.target.value)}
+                className="flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-[#c9a84c] focus:outline-none"
+              >
+                {tzOptions.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+              {tzStatus === 'saving' && (
+                <span className="text-sm text-neutral-400">Saving…</span>
+              )}
+              {tzStatus === 'saved' && (
+                <span className="text-sm text-[#c9a84c]">Saved ✓</span>
+              )}
+              {tzStatus === 'error' && (
+                <span className="text-sm text-red-400">Couldn&apos;t save</span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Sign out / delete ────────────────────────────────────── */}
+        <section className="mt-10 flex flex-col items-center gap-4">
+          <form action={logout} className="w-full">
+            <button
+              type="submit"
+              className="w-full rounded-md border border-neutral-700 px-4 py-2 text-sm text-neutral-300 transition hover:border-neutral-500 hover:text-white"
+            >
+              Sign out
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={() => setShowDeleteModal(true)}
+            className="text-xs text-neutral-500 underline-offset-4 transition hover:text-red-400 hover:underline"
+          >
+            Delete my account
+          </button>
+        </section>
       </div>
 
       {/* ── Cancel confirmation modal ──────────────────────────────── */}
@@ -306,6 +452,43 @@ export default function ProfileClient(props: ProfileProps) {
                 className="flex-1 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-40"
               >
                 {cancelling ? 'Cancelling…' : 'Yes, cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete account confirmation modal ──────────────────────── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="w-full max-w-sm rounded-xl border border-red-900 bg-neutral-900 p-6">
+            <h3 className="text-lg font-bold text-white">Delete your account?</h3>
+            <p className="mt-3 text-sm text-neutral-300">
+              This permanently deletes your account, profile, and notification
+              settings. This <span className="font-semibold">cannot be undone</span>{' '}
+              — you&apos;ll need to sign up again to use the app.
+            </p>
+
+            {deleteError && (
+              <p className="mt-3 text-sm text-red-400">{deleteError}</p>
+            )}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 rounded-md border border-neutral-700 px-4 py-2 text-sm text-white transition hover:border-neutral-500 disabled:opacity-40"
+              >
+                Keep my account
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-40"
+              >
+                {deleting ? 'Deleting…' : 'Delete forever'}
               </button>
             </div>
           </div>

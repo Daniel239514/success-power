@@ -21,7 +21,7 @@ export default async function ProfilePage() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'full_name, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone',
+      'full_name, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone, notify_daily, notify_streak, notify_masterclass',
     )
     .eq('id', user.id)
     .single()
@@ -30,6 +30,7 @@ export default async function ProfilePage() {
   // auth user (not the profiles row), so we pass it explicitly.
   return (
     <ProfileClient
+      userId={user.id}
       email={user.email ?? ''}
       fullName={profile?.full_name ?? ''}
       subscriptionStatus={profile?.subscription_status ?? 'free'}
@@ -38,6 +39,9 @@ export default async function ProfilePage() {
       stripeCustomerId={profile?.stripe_customer_id ?? null}
       paystackCustomerCode={profile?.paystack_customer_code ?? null}
       timezone={profile?.timezone ?? null}
+      notifyDaily={profile?.notify_daily ?? true}
+      notifyStreak={profile?.notify_streak ?? true}
+      notifyMasterclass={profile?.notify_masterclass ?? true}
     />
   )
 }

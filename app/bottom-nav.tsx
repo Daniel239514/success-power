@@ -3,7 +3,14 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-export default function BottomNav({ showSubscribe }: { showSubscribe: boolean }) {
+export default function BottomNav({
+  showSubscribe,
+  profileInitials,
+}: {
+  showSubscribe: boolean
+  // null when logged out -> no Profile tab.
+  profileInitials: string | null
+}) {
   const pathname = usePathname()
 
   // The admin area has its own navigation, so hide the consumer bottom nav there.
@@ -20,6 +27,8 @@ export default function BottomNav({ showSubscribe }: { showSubscribe: boolean })
     if (href === '/') return pathname === '/'
     return pathname === href || pathname.startsWith(`${href}/`)
   }
+
+  const profileActive = isActive('/profile')
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-neutral-800 bg-[#0a0a0a]">
@@ -39,6 +48,27 @@ export default function BottomNav({ showSubscribe }: { showSubscribe: boolean })
             </li>
           )
         })}
+
+        {/* Profile tab: only when logged in, shown as the user's initials. */}
+        {profileInitials && (
+          <li key="/profile" className="flex-1">
+            <Link
+              href="/profile"
+              aria-label="Profile"
+              className="flex items-center justify-center py-3"
+            >
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition ${
+                  profileActive
+                    ? 'border-[#c9a84c] text-[#c9a84c]'
+                    : 'border-neutral-600 text-neutral-400'
+                }`}
+              >
+                {profileInitials}
+              </span>
+            </Link>
+          </li>
+        )}
       </ul>
     </nav>
   )

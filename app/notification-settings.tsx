@@ -41,26 +41,32 @@ function Toggle({
   )
 }
 
+type NotifyColumn = 'notify_daily' | 'notify_streak' | 'notify_masterclass'
+
 export default function NotificationSettings({
   userId,
   initialDaily,
   initialStreak,
+  initialMasterclass,
 }: {
   userId: string
   initialDaily: boolean
   initialStreak: boolean
+  initialMasterclass: boolean
 }) {
   const [supabase] = useState(() => createClient())
-  const [daily, setDaily] = useState(initialDaily)
-  const [streak, setStreak] = useState(initialStreak)
+  const [values, setValues] = useState({
+    notify_daily: initialDaily,
+    notify_streak: initialStreak,
+    notify_masterclass: initialMasterclass,
+  })
   const [error, setError] = useState<string | null>(null)
 
   // Update one preference. We flip the switch immediately (optimistic), then
   // save; if the save fails we flip it back so the UI never lies.
-  async function update(column: 'notify_daily' | 'notify_streak', value: boolean) {
+  async function update(column: NotifyColumn, value: boolean) {
     setError(null)
-    if (column === 'notify_daily') setDaily(value)
-    else setStreak(value)
+    setValues((v) => ({ ...v, [column]: value }))
 
     const { error } = await supabase
       .from('profiles')
@@ -69,8 +75,7 @@ export default function NotificationSettings({
 
     if (error) {
       setError('Could not save — please try again.')
-      if (column === 'notify_daily') setDaily(!value)
-      else setStreak(!value)
+      setValues((v) => ({ ...v, [column]: !value }))
     }
   }
 
@@ -79,14 +84,20 @@ export default function NotificationSettings({
       <Toggle
         label="Daily audio alerts"
         description="A reminder each morning when your new day unlocks."
-        checked={daily}
+        checked={values.notify_daily}
         onChange={(v) => update('notify_daily', v)}
       />
       <Toggle
         label="Streak reminders"
         description="An evening nudge if you haven't listened that day."
-        checked={streak}
+        checked={values.notify_streak}
         onChange={(v) => update('notify_streak', v)}
+      />
+      <Toggle
+        label="Masterclass announcements"
+        description="Occasional alerts about new masterclasses and events."
+        checked={values.notify_masterclass}
+        onChange={(v) => update('notify_masterclass', v)}
       />
       {error && <p className="pt-3 text-xs text-red-400">{error}</p>}
     </div>
