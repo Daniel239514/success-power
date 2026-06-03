@@ -35,6 +35,12 @@ export const metadata: Metadata = {
 // the OS uses to tint app UI around your page.
 export const viewport: Viewport = {
   themeColor: "#c9a84c",
+  // Lock the app at 1x so the phone can't pinch-zoom — keeps it feeling like a
+  // native app rather than a zoomable web page.
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default async function RootLayout({
