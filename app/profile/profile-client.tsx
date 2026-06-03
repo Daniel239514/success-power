@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import NotificationSettings from '@/app/notification-settings'
 import { logout } from '@/app/logout/actions'
 import { getInitials } from '@/lib/initials'
+
+const AVATAR_MAX_BYTES = 3 * 1024 * 1024 // 3 MB
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 // A curated list of common IANA zones for the dropdown. The user's actual saved
 // or browser-detected zone is merged in at render time, so this list never has
@@ -37,6 +40,7 @@ export type ProfileProps = {
   userId: string
   email: string
   fullName: string
+  avatarUrl: string | null
   subscriptionStatus: string
   subscriptionPlan: string | null
   currentPeriodEnd: string | null
@@ -154,6 +158,55 @@ export default function ProfileClient(props: ProfileProps) {
     new Set([...(tz ? [tz] : []), ...COMMON_TIMEZONES]),
   )
 
+  // Avatar: current URL in state so the header + nav reflect a new upload
+  // immediately. A hidden file input is triggered by the "Change photo" button.
+  const [avatarUrl, setAvatarUrl] = useState(props.avatarUrl)
+  const [avatarStatus, setAvatarStatus] = useState<
+    'idle' | 'uploading' | 'error'
+  >('idle')
+  const [avatarError, setAvatarError] = useState('')
+  const [showAvatarModal, setShowAvatarModal] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // Reset the input so picking the same file again still fires onChange.
+    e.target.value = ''
+    if (!file) return
+
+    setAvatarError('')
+    if (!AVATAR_TYPES.includes(file.type)) {
+      setAvatarStatus('error')
+      setAvatarError('Use a JPG, PNG or WebP image.')
+      return
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      setAvatarStatus('error')
+      setAvatarError('Image must be 3MB or smaller.')
+      return
+    }
+
+    setAvatarStatus('uploading')
+
+    // Send the file to our route, which uploads it server-side and returns the
+    // saved public URL.
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+      setAvatarUrl(data.avatarUrl)
+      setAvatarStatus('idle')
+    } catch (err) {
+      setAvatarStatus('error')
+      setAvatarError(err instanceof Error ? err.message : 'Upload failed')
+    }
+  }
+
   // The name lives in state so the header (initials + name) updates the moment
   // the user saves, without a page reload. `savedName` is what's persisted;
   // `draftName` is what's in the input box.
@@ -219,9 +272,54 @@ export default function ProfileClient(props: ProfileProps) {
       <div className="mx-auto w-full max-w-md">
         {/* ── Profile header ───────────────────────────────────────── */}
         <header className="flex flex-col items-center text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#c9a84c] bg-neutral-900 text-3xl font-bold text-[#c9a84c]">
-            {initials}
-          </div>
+          <button
+            type="button"
+            onClick={() =>
+              avatarUrl
+                ? setShowAvatarModal(true)
+                : fileInputRef.current?.click()
+            }
+            disabled={avatarStatus === 'uploading'}
+            aria-label={avatarUrl ? 'View profile picture' : 'Add profile picture'}
+            className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-[#c9a84c] bg-neutral-900 text-3xl font-bold text-[#c9a84c] disabled:opacity-60"
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initials
+            )}
+            {avatarStatus === 'uploading' && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-medium text-white">
+                Uploading…
+              </span>
+            )}
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={onAvatarChange}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarStatus === 'uploading'}
+            className="mt-2 text-xs text-neutral-400 underline-offset-4 transition hover:text-[#c9a84c] hover:underline disabled:opacity-50"
+          >
+            {avatarUrl ? 'Change photo' : 'Add photo'}
+          </button>
+
+          {avatarError && (
+            <p className="mt-1 text-xs text-red-400">{avatarError}</p>
+          )}
 
           <h1 className="mt-4 text-2xl font-bold text-white">
             {savedName.trim() || (
@@ -455,6 +553,28 @@ export default function ProfileClient(props: ProfileProps) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Avatar viewer ──────────────────────────────────────────── */}
+      {showAvatarModal && avatarUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/90 px-6"
+          onClick={() => setShowAvatarModal(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={avatarUrl}
+            alt="Profile"
+            className="max-h-[80vh] max-w-full rounded-lg object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => setShowAvatarModal(false)}
+            className="rounded-md border border-neutral-600 px-4 py-2 text-sm text-white transition hover:border-[#c9a84c] hover:text-[#c9a84c]"
+          >
+            Close
+          </button>
         </div>
       )}
 

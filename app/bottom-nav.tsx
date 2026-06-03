@@ -6,10 +6,12 @@ import { usePathname } from 'next/navigation'
 export default function BottomNav({
   showSubscribe,
   profileInitials,
+  profileAvatarUrl,
 }: {
   showSubscribe: boolean
   // null when logged out -> no Profile tab.
   profileInitials: string | null
+  profileAvatarUrl: string | null
 }) {
   const pathname = usePathname()
 
@@ -58,13 +60,22 @@ export default function BottomNav({
               className="flex items-center justify-center py-3"
             >
               <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition ${
+                className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border text-xs font-bold transition ${
                   profileActive
                     ? 'border-[#c9a84c] text-[#c9a84c]'
                     : 'border-neutral-600 text-neutral-400'
                 }`}
               >
-                {profileInitials}
+                {profileAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profileAvatarUrl}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  profileInitials
+                )}
               </span>
             </Link>
           </li>

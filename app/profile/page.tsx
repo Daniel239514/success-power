@@ -21,7 +21,7 @@ export default async function ProfilePage() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'full_name, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone, notify_daily, notify_streak, notify_masterclass',
+      'full_name, avatar_url, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone, notify_daily, notify_streak, notify_masterclass',
     )
     .eq('id', user.id)
     .single()
@@ -33,6 +33,7 @@ export default async function ProfilePage() {
       userId={user.id}
       email={user.email ?? ''}
       fullName={profile?.full_name ?? ''}
+      avatarUrl={profile?.avatar_url ?? null}
       subscriptionStatus={profile?.subscription_status ?? 'free'}
       subscriptionPlan={profile?.subscription_plan ?? null}
       currentPeriodEnd={profile?.current_period_end ?? null}
