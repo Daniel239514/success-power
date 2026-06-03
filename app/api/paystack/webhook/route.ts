@@ -81,9 +81,13 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      // Cancellation / non-renewal — mirror of Stripe's customer.subscription.deleted.
-      // These events carry the customer, not our metadata, so we match the user
-      // by the Paystack customer code we stored at charge.success.
+      // Cancellation / non-renewal. Paystack fires this the moment a
+      // subscription is disabled (including by our own /api/paystack/cancel
+      // route). The user has already PAID for the current cycle, so we must NOT
+      // cut access now — we mark them 'cancelling' and keep current_period_end.
+      // The paywall (lib/access.ts) treats 'cancelling' as having access until
+      // that date, then locks them out automatically. Paystack sends no event
+      // at the real end date, so the date comparison is the only thing needed.
       case 'subscription.disable':
       case 'subscription.not_renew': {
         const customerCode = event.data?.customer?.customer_code
@@ -94,18 +98,14 @@ export async function POST(request: NextRequest) {
 
         const { error } = await supabase
           .from('profiles')
-          .update({
-            subscription_status: 'free',
-            subscription_plan: null,
-            current_period_end: null,
-          })
+          .update({ subscription_status: 'cancelling' })
           .eq('paystack_customer_code', customerCode)
 
         if (error) {
-          console.error('❌ Failed to downgrade profile:', error.message)
+          console.error('❌ Failed to mark profile cancelling:', error.message)
           return NextResponse.json({ error: 'DB update failed' }, { status: 500 })
         }
-        console.log('↩️  Paystack subscription ended — user set back to free.')
+        console.log('↩️  Paystack subscription cancelling — access kept until period end.')
         break
       }
 

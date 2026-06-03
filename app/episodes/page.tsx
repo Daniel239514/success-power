@@ -18,7 +18,7 @@ export default async function EpisodesPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('subscription_start_date, subscription_status')
+    .select('subscription_start_date, subscription_status, current_period_end')
     .eq('id', user.id)
     .single()
 

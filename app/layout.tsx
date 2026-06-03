@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
+import { hasSubscriberAccess } from "@/lib/access";
 import BottomNav from "./bottom-nav";
 import SwRegister from "./sw-register";
 import TimezoneSync from "./timezone-sync";
@@ -51,10 +52,10 @@ export default async function RootLayout({
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("subscription_status")
+      .select("subscription_status, current_period_end")
       .eq("id", user.id)
       .single();
-    isSubscriber = profile?.subscription_status === "active";
+    isSubscriber = hasSubscriberAccess(profile);
   }
 
   const showSubscribe = Boolean(user) && !isSubscriber;

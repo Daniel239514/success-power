@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { hasSubscriberAccess } from '@/lib/access'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
 import FreePlanBanner from './free-plan-banner'
@@ -43,11 +44,13 @@ export default async function Home() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('subscription_start_date, subscription_status, subscription_plan')
+    .select(
+      'subscription_start_date, subscription_status, subscription_plan, current_period_end',
+    )
     .eq('id', user.id)
     .single()
 
-  const isSubscriber = profile?.subscription_status === 'active'
+  const isSubscriber = hasSubscriberAccess(profile)
   const planLabel = profile?.subscription_plan === 'annual' ? 'Annual' : 'Monthly'
 
   const tz = (await cookies()).get('tz')?.value
