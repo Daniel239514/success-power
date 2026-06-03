@@ -1,0 +1,42 @@
+name: Notification crons
+
+# Hits the two notification endpoints hourly so the daily-6 AM and streak
+# pushes keep working WITHOUT Vercel's Pro plan (Hobby caps crons at once a
+# day). Each endpoint itself checks every user's timezone and only sends to
+# those at their local 6 AM / 8 PM, so running it every hour is correct.
+#
+# Authenticated with the same CRON_SECRET the Vercel crons use, sent as
+# "Authorization: Bearer <secret>".
+#
+# ── SETUP ──────────────────────────────────────────────────────────────────
+# Add two repository secrets (GitHub repo → Settings → Secrets and variables →
+# Actions → New repository secret):
+#   CRON_SECRET   — the exact same value as CRON_SECRET in Vercel / .env.local
+#   APP_BASE_URL  — your production URL, no trailing slash
+#                   (e.g. https://success-power.vercel.app)
+#
+# ── CUTOVER (on/before the Pro trial expiry ~2026-06-08) ────────────────────
+# Uncomment the `schedule:` block below AND delete the two crons from
+# vercel.json in the same commit. Running both schedulers at once would send
+# every notification twice.
+
+on:
+  workflow_dispatch: {} # manual "Run workflow" button — use this to test now
+  # schedule:
+  #   - cron: '0 * * * *' # hourly, on the hour (UTC) — enable at cutover
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Daily episode push
+        run: |
+          curl -sS --fail-with-body -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_BASE_URL }}/api/cron/daily-episode"
+
+      - name: Streak reminder push
+        run: |
+          curl -sS --fail-with-body -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_BASE_URL }}/api/cron/streak-reminder"
