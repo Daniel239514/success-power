@@ -24,3 +24,51 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Formatting for rich-text post bodies. Tailwind v4's reset strips heading and
+   list styling, so we restore it here. Used by BOTH the TipTap editor (admin)
+   and the public /newsletter post page, so they look identical. */
+.rich-text {
+  line-height: 1.7;
+}
+.rich-text h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.25em 0 0.5em;
+}
+.rich-text h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 1.1em 0 0.4em;
+}
+.rich-text p {
+  margin: 0.75em 0;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 0.75em 0;
+  padding-left: 1.5rem;
+}
+.rich-text ul {
+  list-style: disc;
+}
+.rich-text ol {
+  list-style: decimal;
+}
+.rich-text li {
+  margin: 0.25em 0;
+}
+.rich-text a {
+  color: #c9a84c;
+  text-decoration: underline;
+}
+.rich-text strong {
+  font-weight: 700;
+}
+.rich-text em {
+  font-style: italic;
+}
+/* TipTap shows the placeholder via this when the editor is empty */
+.rich-text:focus {
+  outline: none;
+}

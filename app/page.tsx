@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { hasSubscriberAccess } from '@/lib/access'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
+import { previewText } from '@/lib/newsletter'
 import FreePlanBanner from './free-plan-banner'
 import EnableNotifications from './enable-notifications'
 import SendTestButton from './send-test-button'
@@ -60,6 +61,16 @@ export default async function Home() {
 
   const todayEpisode = await getEpisodeForDay(currentDay)
 
+  // Most recent published newsletter post (for the "Latest from Sam" card).
+  // Both free and paid users see it; it's hidden entirely if there are none.
+  const { data: latestPost } = await supabase
+    .from('posts')
+    .select('title, slug, body_html')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 bg-[#0a0a0a] px-6 pb-24 pt-12">
       {!isSubscriber && <FreePlanBanner />}
@@ -112,6 +123,24 @@ export default async function Home() {
         </article>
       ) : (
         <p className="text-neutral-400">No episode available for today yet.</p>
+      )}
+
+      {latestPost && (
+        <Link
+          href={`/newsletter/${latestPost.slug}`}
+          className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-5 transition hover:border-[#c9a84c]"
+        >
+          <p className="text-xs uppercase tracking-widest text-[#c9a84c]">
+            Latest from Sam
+          </p>
+          <h3 className="mt-2 text-lg font-bold text-white">{latestPost.title}</h3>
+          <p className="mt-1 text-sm text-neutral-400">
+            {previewText(latestPost.body_html, 150)}
+          </p>
+          <span className="mt-3 inline-block text-sm font-semibold text-[#c9a84c]">
+            Read →
+          </span>
+        </Link>
       )}
 
       <EnableNotifications />
