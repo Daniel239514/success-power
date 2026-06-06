@@ -4,9 +4,9 @@ import { signup } from './actions'
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; ref?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, ref } = await searchParams
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a] px-6">
@@ -16,6 +16,7 @@ export default async function SignupPage({
         </h1>
 
         <form action={signup} className="flex flex-col gap-4">
+          {ref && <input type="hidden" name="ref" value={ref} />}
           <label className="flex flex-col gap-2 text-sm text-white">
             Email
             <input

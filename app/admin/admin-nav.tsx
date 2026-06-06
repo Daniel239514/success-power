@@ -11,6 +11,7 @@ const LINKS = [
   { href: '/admin/masterclasses', label: 'Masterclasses' },
   { href: '/admin/courses', label: 'Courses' },
   { href: '/admin/calendar', label: 'Calendar' },
+  { href: '/admin/referrals', label: 'Referrals' },
   { href: '/admin/subscribers', label: 'Subscribers' },
   { href: '/admin/broadcasts', label: 'Broadcasts' },
   { href: '/admin/settings', label: 'Settings' },

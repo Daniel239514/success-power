@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { creditReferrer } from '@/lib/referral'
 
 // Stripe + the service-role Supabase client both need Node APIs, so force the
 // Node.js runtime (not Edge).
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'DB update failed' }, { status: 500 })
         }
         console.log(`🎉 User ${userId} is now active (${plan}).`)
+        await creditReferrer(userId)
         break
       }
 

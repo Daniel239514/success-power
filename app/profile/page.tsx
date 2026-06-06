@@ -18,13 +18,31 @@ export default async function ProfilePage() {
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select(
-      'full_name, avatar_url, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone, notify_daily, notify_streak, notify_masterclass',
-    )
-    .eq('id', user.id)
-    .single()
+  const [{ data: profile }, { data: referralCodeRow }, { data: referralRows }] =
+    await Promise.all([
+      supabase
+        .from('profiles')
+        .select(
+          'full_name, avatar_url, subscription_status, subscription_plan, current_period_end, stripe_customer_id, paystack_customer_code, timezone, notify_daily, notify_streak, notify_masterclass',
+        )
+        .eq('id', user.id)
+        .single(),
+      supabase
+        .from('referral_codes')
+        .select('code')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('referrals')
+        .select('status')
+        .eq('referrer_id', user.id),
+    ])
+
+  const referralCount = referralRows?.length ?? 0
+  const convertedCount =
+    referralRows?.filter(
+      (r) => r.status === 'converted' || r.status === 'credited',
+    ).length ?? 0
 
   // Hand everything the client needs down in one bundle. Email lives on the
   // auth user (not the profiles row), so we pass it explicitly.
@@ -43,6 +61,9 @@ export default async function ProfilePage() {
       notifyDaily={profile?.notify_daily ?? true}
       notifyStreak={profile?.notify_streak ?? true}
       notifyMasterclass={profile?.notify_masterclass ?? true}
+      referralCode={referralCodeRow?.code ?? null}
+      referralCount={referralCount}
+      convertedCount={convertedCount}
     />
   )
 }

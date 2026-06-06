@@ -50,6 +50,9 @@ export type ProfileProps = {
   notifyDaily: boolean
   notifyStreak: boolean
   notifyMasterclass: boolean
+  referralCode: string | null
+  referralCount: number
+  convertedCount: number
 }
 
 // "annual" -> "Annual", "monthly" -> "Monthly", anything else -> "Free".
@@ -105,6 +108,41 @@ export default function ProfileClient(props: ProfileProps) {
   const [tzStatus, setTzStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
   )
+
+  // Referral link — origin is only available in the browser, so we set it
+  // after mount to avoid an SSR/hydration mismatch.
+  const [origin, setOrigin] = useState('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+  const referralLink = props.referralCode
+    ? `${origin}/join?ref=${props.referralCode}`
+    : ''
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(referralLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard API not available — nothing to do
+    }
+  }
+
+  async function handleShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Success Power',
+          text: `I've been using Success Power to build better daily habits. Join me here: ${referralLink}`,
+          url: referralLink,
+        })
+        return
+      } catch {
+        // user cancelled — fall through to copy
+      }
+    }
+    await handleCopy()
+  }
 
   // Delete-account flow.
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -444,6 +482,51 @@ export default function ProfileClient(props: ProfileProps) {
                 </a>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* ── Refer a Friend ───────────────────────────────────────── */}
+        <section className="mt-10">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-neutral-500">
+            Refer a Friend
+          </h2>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            {props.referralCode ? (
+              <>
+                <p className="text-sm text-neutral-300">
+                  Share your link — when a friend subscribes, you both win: they
+                  get access and you get <span className="text-[#c9a84c] font-semibold">one free month</span>.
+                </p>
+                <div className="mt-3 break-all rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-xs text-[#c9a84c] select-all">
+                  {referralLink || `…/join?ref=${props.referralCode}`}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="flex-1 rounded-md bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#d4b85c]"
+                  >
+                    {copied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="flex-1 rounded-md border border-neutral-700 px-4 py-2 text-sm text-neutral-300 transition hover:border-[#c9a84c] hover:text-[#c9a84c]"
+                  >
+                    Share
+                  </button>
+                </div>
+                <p className="mt-4 text-xs text-neutral-500">
+                  {props.referralCount}{' '}
+                  {props.referralCount === 1 ? 'friend' : 'friends'} referred ·{' '}
+                  {props.convertedCount} converted
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-500">
+                Your referral link is being generated — check back shortly.
+              </p>
+            )}
           </div>
         </section>
 
