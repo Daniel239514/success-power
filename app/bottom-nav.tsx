@@ -21,6 +21,7 @@ export default function BottomNav({
   const tabs = [
     { href: '/', label: 'Home' },
     { href: '/episodes', label: 'Episodes' },
+    { href: '/masterclass', label: 'Masterclass' },
     // Free users get an extra tab to upgrade; subscribers never see it.
     ...(showSubscribe ? [{ href: '/subscribe', label: 'Subscribe' }] : []),
   ]

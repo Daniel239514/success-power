@@ -5,6 +5,7 @@ import { hasSubscriberAccess } from '@/lib/access'
 import { calculateDayNumber, TOTAL_DAYS } from '@/lib/dayNumber'
 import { getEpisodeForDay } from '@/lib/episodes'
 import { previewText } from '@/lib/newsletter'
+import { formatPrice } from '@/lib/format'
 import FreePlanBanner from './free-plan-banner'
 import EnableNotifications from './enable-notifications'
 import SendTestButton from './send-test-button'
@@ -70,6 +71,25 @@ export default async function Home() {
     .order('published_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+
+  // Home upsell grid: next upcoming/live masterclass + first active course.
+  // Run both queries in parallel — neither depends on the other.
+  const [{ data: nextMasterclass }, { data: firstCourse }] = await Promise.all([
+    supabase
+      .from('masterclasses')
+      .select('id, title, members_price, general_price, currency, checkout_url, status')
+      .in('status', ['upcoming', 'live'])
+      .order('event_date', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('course_products')
+      .select('id, title, price, currency, checkout_url')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 bg-[#0a0a0a] px-6 pb-24 pt-12">
@@ -141,6 +161,66 @@ export default async function Home() {
             Read →
           </span>
         </Link>
+      )}
+
+      {/* Upsell grid: next masterclass + first active course. Hidden if neither exists. */}
+      {(nextMasterclass || firstCourse) && (
+        <div className="w-full max-w-md">
+          <p className="mb-3 text-xs uppercase tracking-widest text-neutral-500">
+            From Sam
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {nextMasterclass && (
+              <a
+                href={nextMasterclass.checkout_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-4 transition hover:border-[#c9a84c]"
+              >
+                {nextMasterclass.status === 'live' && (
+                  <span className="mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-red-600/20 px-2 py-0.5 text-xs font-bold text-red-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                    LIVE
+                  </span>
+                )}
+                <p className="text-xs uppercase tracking-widest text-[#c9a84c]">
+                  Masterclass
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug text-white">
+                  {nextMasterclass.title}
+                </p>
+                <p className="mt-2 text-base font-bold text-[#c9a84c]">
+                  {formatPrice(nextMasterclass.members_price, nextMasterclass.currency)}
+                </p>
+                <span className="mt-2 text-xs font-semibold text-[#c9a84c]">
+                  Register →
+                </span>
+              </a>
+            )}
+
+            {firstCourse && (
+              <a
+                href={firstCourse.checkout_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-4 transition hover:border-[#c9a84c]"
+              >
+                <p className="text-xs uppercase tracking-widest text-[#c9a84c]">
+                  Course
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug text-white">
+                  {firstCourse.title}
+                </p>
+                <p className="mt-2 text-base font-bold text-[#c9a84c]">
+                  {formatPrice(firstCourse.price, firstCourse.currency)}
+                </p>
+                <span className="mt-2 text-xs font-semibold text-[#c9a84c]">
+                  Get Course →
+                </span>
+              </a>
+            )}
+          </div>
+        </div>
       )}
 
       <EnableNotifications />

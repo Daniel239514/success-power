@@ -8,6 +8,8 @@ const LINKS = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/episodes', label: 'Episodes' },
   { href: '/admin/posts', label: 'Newsletter' },
+  { href: '/admin/masterclasses', label: 'Masterclasses' },
+  { href: '/admin/courses', label: 'Courses' },
   { href: '/admin/calendar', label: 'Calendar' },
   { href: '/admin/subscribers', label: 'Subscribers' },
   { href: '/admin/broadcasts', label: 'Broadcasts' },
