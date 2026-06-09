@@ -15,7 +15,8 @@ export async function signup(formData: FormData) {
   const { data, error } = await supabase.auth.signUp({ email, password })
 
   if (error) {
-    const qs = new URLSearchParams({ error: error.message })
+    console.error('Signup error:', error.status, error.code, error.message)
+    const qs = new URLSearchParams({ error: error.message || error.code || 'Signup failed' })
     if (refCode) qs.set('ref', refCode)
     redirect(`/signup?${qs.toString()}`)
   }
@@ -45,5 +46,5 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/login?message=Check%20your%20email%20to%20confirm%20your%20account%2C%20then%20log%20in.')
+  redirect('/login?message=Account%20created!%20Log%20in%20to%20get%20started.')
 }
