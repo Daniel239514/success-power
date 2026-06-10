@@ -7,8 +7,10 @@ import { getEpisodeForDay } from '@/lib/episodes'
 import { previewText } from '@/lib/newsletter'
 import { formatPrice } from '@/lib/format'
 import FreePlanBanner from './free-plan-banner'
-import EnableNotifications from './enable-notifications'
-import SendTestButton from './send-test-button'
+import NotificationCard from './notification-card'
+import HomeStats from './home-stats'
+import HomeProgress from './home-progress'
+import InstallBanner from './install-banner'
 import { logout } from './logout/actions'
 
 export default async function Home() {
@@ -72,9 +74,12 @@ export default async function Home() {
     .limit(1)
     .maybeSingle()
 
-  // Home upsell grid: next upcoming/live masterclass + first active course.
-  // Run both queries in parallel — neither depends on the other.
-  const [{ data: nextMasterclass }, { data: firstCourse }] = await Promise.all([
+  // Fetch all in parallel — none of these depend on each other.
+  const [
+    { data: nextMasterclass },
+    { data: firstCourse },
+    { data: completedProgress },
+  ] = await Promise.all([
     supabase
       .from('masterclasses')
       .select('id, title, members_price, general_price, currency, checkout_url, status')
@@ -89,42 +94,85 @@ export default async function Home() {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Join listening_progress → episodes to get the day_number of each completed episode.
+    // Used to compute streak, days completed, and days remaining.
+    supabase
+      .from('listening_progress')
+      .select('episodes(day_number)')
+      .eq('user_id', user.id)
+      .eq('completed', true),
   ])
 
+  // Build a set of completed day numbers for O(1) streak lookups.
+  const completedDays = new Set<number>(
+    (completedProgress ?? [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((p: any) => (p.episodes as { day_number: number } | null)?.day_number)
+      .filter((d): d is number => d != null),
+  )
+
+  const daysCompleted = completedDays.size
+
+  // Streak: count consecutive completed days ending on today or yesterday.
+  // We allow "yesterday" so the streak stays alive if the user hasn't played
+  // today's episode yet — it's still the same session day for most people.
+  let streak = 0
+  {
+    let checkDay = completedDays.has(currentDay) ? currentDay : currentDay - 1
+    if (completedDays.has(checkDay)) {
+      while (checkDay >= 1 && completedDays.has(checkDay)) {
+        streak++
+        checkDay--
+      }
+    }
+  }
+
+  // Days remaining: free users are shown a 30-day journey (creates urgency to
+  // subscribe); paid users see the full 365-day programme.
+  const totalDays = isSubscriber ? TOTAL_DAYS : 30
+  const daysRemaining = Math.max(0, totalDays - daysCompleted)
+
   return (
-    <main className="flex min-h-screen flex-col items-center gap-8 bg-[#0a0a0a] px-6 pb-24 pt-12">
+    <main className="flex min-h-screen flex-col items-center gap-6 bg-[#0a0a0a] px-6 pb-24 pt-10">
       {!isSubscriber && <FreePlanBanner />}
 
-      <h1 className="text-center text-4xl font-bold tracking-tight text-[#c9a84c] sm:text-5xl">
-        Success Power
-      </h1>
-
-      <p className="text-sm text-neutral-400">Welcome, {user.email}</p>
-
-      {isSubscriber ? (
-        <span className="rounded-full border border-[#c9a84c] bg-[#c9a84c]/10 px-4 py-1.5 text-sm font-semibold text-[#c9a84c]">
-          ★ Active subscriber — {planLabel}
-        </span>
-      ) : (
-        <div className="flex flex-col items-center gap-2">
-          <span className="rounded-full border border-neutral-700 px-4 py-1.5 text-sm text-neutral-400">
-            Free plan
+      {/* Header block — tight internal spacing so it reads as one unit */}
+      <div className="flex flex-col items-center gap-2 text-center">
+        <h1 className="text-4xl font-bold tracking-tight text-[#c9a84c] sm:text-5xl">
+          Success Power
+        </h1>
+        <p className="text-sm text-neutral-400">Welcome, {user.email}</p>
+        {isSubscriber ? (
+          <span className="rounded-full border border-[#c9a84c] bg-[#c9a84c]/10 px-4 py-1.5 text-sm font-semibold text-[#c9a84c]">
+            ★ Active subscriber — {planLabel}
           </span>
-          <Link
-            href="/subscribe"
-            className="text-sm font-semibold text-[#c9a84c] underline-offset-4 hover:underline"
-          >
-            Go Premium →
-          </Link>
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <span className="rounded-full border border-neutral-700 px-4 py-1.5 text-sm text-neutral-400">
+              Free plan
+            </span>
+            <Link
+              href="/subscribe"
+              className="text-sm font-semibold text-[#c9a84c] underline-offset-4 hover:underline"
+            >
+              Go Premium →
+            </Link>
+          </div>
+        )}
+      </div>
 
-      <div className="text-center">
-        <p className="text-sm uppercase tracking-widest text-neutral-500">Today</p>
-        <p className="mt-2 text-6xl font-bold text-white sm:text-7xl">
-          Day {currentDay}
-        </p>
-        <p className="mt-1 text-base text-neutral-400">of {TOTAL_DAYS}</p>
+      <InstallBanner />
+
+      <NotificationCard />
+
+      {/* Dashboard block — stats + bar are one unit, tighter internal gap */}
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <HomeStats
+          streak={streak}
+          daysCompleted={daysCompleted}
+          daysRemaining={daysRemaining}
+        />
+        <HomeProgress daysCompleted={daysCompleted} totalDays={totalDays} />
       </div>
 
       {todayEpisode ? (
@@ -222,10 +270,6 @@ export default async function Home() {
           </div>
         </div>
       )}
-
-      <EnableNotifications />
-
-      <SendTestButton />
 
       <Link
         href="/settings"
