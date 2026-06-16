@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { createAudioUploadUrl, updateEpisode } from '../../actions'
+import { updateEpisode } from '../../actions'
 
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const ALLOWED_EXT = ['mp3', 'm4a']
@@ -23,8 +22,6 @@ export default function EditEpisodeForm({
   initialKeyQuote: string
   initialAudioUrl: string
 }) {
-  const [supabase] = useState(() => createClient())
-
   const [title, setTitle] = useState(initialTitle)
   const [description, setDescription] = useState(initialDescription)
   const [keyQuote, setKeyQuote] = useState(initialKeyQuote)
@@ -48,7 +45,7 @@ export default function EditEpisodeForm({
       return fail('Description must be 200 characters or fewer.')
     }
 
-    // Start from the existing audio. Only changes if the admin picks a new file.
+    // Keep the existing key unless the admin picks a replacement file.
     let audioUrl = initialAudioUrl
 
     if (file) {
@@ -60,20 +57,21 @@ export default function EditEpisodeForm({
         return fail('Audio file must be 50MB or smaller.')
       }
 
-      const path = `day-${dayNumber}.${ext}`
-
       setStatus('uploading')
-      const signed = await createAudioUploadUrl(path)
-      if ('error' in signed) return fail(signed.error)
+      const body = new FormData()
+      body.append('file', file)
+      body.append('prefix', 'episodes')
 
-      const { error: uploadError } = await supabase.storage
-        .from('audio')
-        .uploadToSignedUrl(path, signed.token, file, {
-          contentType: file.type,
-        })
-      if (uploadError) return fail(`Upload failed: ${uploadError.message}`)
+      const uploadRes = await fetch('/api/admin/upload-audio', {
+        method: 'POST',
+        body,
+      })
+      const uploadJson = await uploadRes.json()
+      if (!uploadRes.ok || uploadJson.error) {
+        return fail(uploadJson.error ?? 'Upload failed.')
+      }
 
-      audioUrl = supabase.storage.from('audio').getPublicUrl(path).data.publicUrl
+      audioUrl = uploadJson.key
     }
 
     setStatus('saving')

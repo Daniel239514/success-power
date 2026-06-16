@@ -2,9 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { slugify } from '@/lib/slug'
-import { createPostAudioUploadUrl, createPost, updatePost } from './actions'
+import { createPost, updatePost } from './actions'
 import RichTextEditor from './rich-text-editor'
 
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -37,10 +36,6 @@ function toLocalInput(iso: string): string {
 
 export default function PostForm({ existing }: { existing?: ExistingPost }) {
   const editing = Boolean(existing)
-
-  // Create the browser Supabase client once (so it has loaded our login from
-  // cookies before any Storage upload). Same reasoning as the episode form.
-  const [supabase] = useState(() => createClient())
 
   const [title, setTitle] = useState(existing?.title ?? '')
   const [slug, setSlug] = useState(existing?.slug ?? '')
@@ -91,18 +86,21 @@ export default function PostForm({ existing }: { existing?: ExistingPost }) {
         return fail('Audio file must be 50MB or smaller.')
       }
 
-      const path = `posts/${crypto.randomUUID()}.${ext}`
-
       setStatus('uploading')
-      const signed = await createPostAudioUploadUrl(path)
-      if ('error' in signed) return fail(signed.error)
+      const body = new FormData()
+      body.append('file', file)
+      body.append('prefix', 'posts')
 
-      const { error: uploadError } = await supabase.storage
-        .from('audio')
-        .uploadToSignedUrl(path, signed.token, file, { contentType: file.type })
-      if (uploadError) return fail(`Upload failed: ${uploadError.message}`)
+      const uploadRes = await fetch('/api/admin/upload-audio', {
+        method: 'POST',
+        body,
+      })
+      const uploadJson = await uploadRes.json()
+      if (!uploadRes.ok || uploadJson.error) {
+        return fail(uploadJson.error ?? 'Upload failed.')
+      }
 
-      audioUrl = supabase.storage.from('audio').getPublicUrl(path).data.publicUrl
+      audioUrl = uploadJson.key
     }
 
     // datetime-local has no timezone. Convert to a UTC ISO instant using the

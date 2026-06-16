@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { createAudioUploadUrl, createEpisode } from '../actions'
+import { createEpisode } from '../actions'
 
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const ALLOWED_EXT = ['mp3', 'm4a']
@@ -11,13 +10,6 @@ const ALLOWED_EXT = ['mp3', 'm4a']
 type Status = 'idle' | 'uploading' | 'saving' | 'error'
 
 export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) {
-  // Create the Supabase browser client ONCE, when the page loads — not inside
-  // the submit handler. A freshly-created client hasn't yet loaded your login
-  // from cookies, so an immediate upload would go out unauthenticated and
-  // Storage would reject it. Creating it here gives it time to be ready.
-  const [supabase] = useState(() => createClient())
-
-  // The day can arrive pre-filled from the calendar (clicking a missing day).
   const [dayNumber, setDayNumber] = useState(initialDay ?? '')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -37,7 +29,6 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
     e.preventDefault()
     setError('')
 
-    // --- Client-side checks (quick feedback; the server re-checks too) ---
     const day = Math.trunc(Number(dayNumber))
     if (!Number.isFinite(day) || day < 1 || day > 365) {
       return fail('Enter a day number between 1 and 365.')
@@ -56,41 +47,31 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
       return fail('Audio file must be 50MB or smaller.')
     }
 
-    const path = `day-${day}.${ext}`
-
+    // --- 1) Upload to R2 via the server-side upload route ---
     setStatus('uploading')
+    const body = new FormData()
+    body.append('file', file)
+    body.append('prefix', 'episodes')
 
-    // --- 1) Ask the server (which knows we're an admin) for a one-time pass ---
-    const signed = await createAudioUploadUrl(path)
-    if ('error' in signed) {
-      return fail(signed.error)
+    const uploadRes = await fetch('/api/admin/upload-audio', {
+      method: 'POST',
+      body,
+    })
+    const uploadJson = await uploadRes.json()
+    if (!uploadRes.ok || uploadJson.error) {
+      return fail(uploadJson.error ?? 'Upload failed.')
     }
 
-    // --- 2) Upload the file straight to Storage using that pass ---
-    const { error: uploadError } = await supabase.storage
-      .from('audio')
-      .uploadToSignedUrl(path, signed.token, file, { contentType: file.type })
-
-    if (uploadError) {
-      return fail(`Upload failed: ${uploadError.message}`)
-    }
-
-    // --- 3) Work out the public URL of the file we just uploaded ---
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('audio').getPublicUrl(path)
-
-    // --- 4) Save the episode row (server action: admin-checked) ---
+    // --- 2) Save the episode row with the R2 key ---
     setStatus('saving')
     const result = await createEpisode({
       dayNumber: day,
       title,
       description,
       keyQuote,
-      audioUrl: publicUrl,
+      audioUrl: uploadJson.key,
     })
 
-    // Success redirects on the server, so reaching here means an error.
     if (result?.error) {
       return fail(result.error)
     }
@@ -197,7 +178,6 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
           )}
         </div>
 
-        {/* Status / error messages */}
         {status === 'uploading' && (
           <p className="text-sm text-slate-600">⏳ Uploading audio… please wait.</p>
         )}

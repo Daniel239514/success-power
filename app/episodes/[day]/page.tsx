@@ -87,7 +87,6 @@ export default async function EpisodePage({
       {canPlay ? (
         <>
           <CustomAudioPlayer
-            src={episode.audio_url}
             title={episode.title}
             episodeId={episode.id}
             userId={user.id}

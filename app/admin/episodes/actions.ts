@@ -4,35 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
-
-// Mint a one-time "upload pass" (a signed upload URL token) for one audio file.
-//
-// The browser can't reliably prove it's an admin to Storage's RLS, so instead
-// the SERVER — which already knows you're an admin (requireAdmin) — uses the
-// service-role client to authorize this single file. The browser then uploads
-// straight to Storage using the returned token. No Storage RLS involved.
-export async function createAudioUploadUrl(
-  path: string,
-): Promise<{ token: string } | { error: string }> {
-  await requireAdmin()
-
-  // Only allow our expected filename shape, e.g. "day-100.mp3" / "day-100.m4a".
-  // This stops a tampered request from writing to some other path.
-  if (!/^day-\d{1,3}\.(mp3|m4a)$/.test(path)) {
-    return { error: 'Invalid file path.' }
-  }
-
-  const supabase = createAdminClient()
-  const { data, error } = await supabase.storage
-    .from('audio')
-    .createSignedUploadUrl(path, { upsert: true })
-
-  if (error || !data) {
-    return { error: error?.message ?? 'Could not prepare the upload.' }
-  }
-
-  return { token: data.token }
-}
+import { deleteAudioFromR2 } from '@/lib/r2'
 
 type NewEpisode = {
   dayNumber: number
@@ -42,21 +14,14 @@ type NewEpisode = {
   audioUrl: string
 }
 
-// Saves a new episode row. The big audio file was ALREADY uploaded to Storage
-// by the browser; this just records the small text fields plus the file's URL.
-//
-// Security: requireAdmin() runs first, on the server, so even if someone calls
-// this action directly (bypassing the form) a non-admin is bounced. The insert
-// then uses the service-role client, which is allowed to write episodes.
-//
-// Returns { error } on failure. On success it doesn't return — it redirects.
+// Saves a new episode row. The audio file was already uploaded to R2 by the
+// browser via /api/admin/upload-audio; this just records the text fields plus
+// the R2 storage key (e.g. "episodes/uuid.mp3").
 export async function createEpisode(
   input: NewEpisode,
 ): Promise<{ error: string } | void> {
   await requireAdmin()
 
-  // Re-validate on the server. Never trust that the browser checked — that's
-  // defence in depth again.
   const dayNumber = Math.trunc(Number(input.dayNumber))
   if (!Number.isFinite(dayNumber) || dayNumber < 1 || dayNumber > 365) {
     return { error: 'Day number must be between 1 and 365.' }
@@ -78,7 +43,6 @@ export async function createEpisode(
   })
 
   if (error) {
-    // 23505 = unique-violation: an episode for this day already exists.
     if (error.code === '23505') {
       return {
         error: `An episode for Day ${dayNumber} already exists. Edit it instead.`,
@@ -87,18 +51,13 @@ export async function createEpisode(
     return { error: error.message }
   }
 
-  // Make the episodes list, the dashboard count, and the cached "today's
-  // episode" all refresh.
   revalidatePath('/admin/episodes')
   revalidatePath('/admin')
   revalidatePath('/')
 
-  // redirect() must be OUTSIDE any try/catch — it works by throwing a signal.
   redirect('/admin/episodes')
 }
 
-// Update an existing episode's text fields (and optionally a replaced audio
-// file). The day number identifies the episode and isn't changed here.
 export async function updateEpisode(
   input: Omit<NewEpisode, never>,
 ): Promise<{ error: string } | void> {
@@ -129,16 +88,9 @@ export async function updateEpisode(
   redirect('/admin/episodes')
 }
 
-// Pull the Storage path (e.g. "day-100.mp3") out of a public audio URL so we
-// can delete the file. Returns null if the URL isn't a Storage URL.
-function audioPathFromUrl(url: string): string | null {
-  const marker = '/audio/'
-  const i = url.indexOf(marker)
-  if (i === -1) return null
-  return decodeURIComponent(url.slice(i + marker.length).split('?')[0])
-}
-
-// Delete an episode: removes the database row AND its audio file from Storage.
+// Delete an episode: removes the database row AND the audio file.
+// Handles both new R2 keys (e.g. "episodes/uuid.mp3") and old Supabase URLs
+// (https://...) that haven't been migrated yet.
 export async function deleteEpisode(
   dayNumber: number,
 ): Promise<{ error: string } | void> {
@@ -146,7 +98,6 @@ export async function deleteEpisode(
 
   const supabase = createAdminClient()
 
-  // Look up the audio URL first, so we know which file to delete.
   const { data: episode } = await supabase
     .from('episodes')
     .select('audio_url')
@@ -160,11 +111,20 @@ export async function deleteEpisode(
 
   if (error) return { error: error.message }
 
-  // Best-effort: remove the audio file too. If this fails we don't undo the
-  // row delete — an orphaned file is harmless and can be cleaned up later.
   if (episode?.audio_url) {
-    const path = audioPathFromUrl(episode.audio_url)
-    if (path) await supabase.storage.from('audio').remove([path])
+    const audioUrl = episode.audio_url
+    if (audioUrl.startsWith('https://')) {
+      // Old Supabase Storage URL — extract the path and delete from Storage.
+      const marker = '/audio/'
+      const i = audioUrl.indexOf(marker)
+      if (i !== -1) {
+        const path = decodeURIComponent(audioUrl.slice(i + marker.length).split('?')[0])
+        await supabase.storage.from('audio').remove([path])
+      }
+    } else {
+      // R2 key — delete directly.
+      await deleteAudioFromR2(audioUrl)
+    }
   }
 
   revalidatePath('/admin/episodes')

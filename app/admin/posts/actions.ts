@@ -6,34 +6,7 @@ import { requireAdmin } from '@/lib/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { slugify } from '@/lib/slug'
 import { sendNewsletterForPost } from '@/lib/newsletter'
-
-// Mint a one-time upload pass for a newsletter audio file. Same idea as the
-// episode version: the SERVER (which knows we're an admin) authorizes one file,
-// then the browser uploads straight to Storage with the token. Newsletter audio
-// lives under a `posts/` prefix inside the existing `audio` bucket.
-export async function createPostAudioUploadUrl(
-  path: string,
-): Promise<{ token: string } | { error: string }> {
-  await requireAdmin()
-
-  // Only allow "posts/<uuid>.mp3" / "posts/<uuid>.m4a". The browser generates a
-  // random uuid filename, so two uploads can never clash and a tampered request
-  // can't escape the posts/ folder.
-  if (!/^posts\/[0-9a-f-]{36}\.(mp3|m4a)$/.test(path)) {
-    return { error: 'Invalid file path.' }
-  }
-
-  const supabase = createAdminClient()
-  const { data, error } = await supabase.storage
-    .from('audio')
-    .createSignedUploadUrl(path, { upsert: true })
-
-  if (error || !data) {
-    return { error: error?.message ?? 'Could not prepare the upload.' }
-  }
-
-  return { token: data.token }
-}
+import { deleteAudioFromR2 } from '@/lib/r2'
 
 export type PostInput = {
   title: string
@@ -205,16 +178,8 @@ export async function updatePost(
   redirect('/admin/posts')
 }
 
-// Pull the Storage path (e.g. "posts/<uuid>.mp3") out of a public audio URL so
-// we can delete the file. Returns null if the URL isn't a Storage URL.
-function audioPathFromUrl(url: string): string | null {
-  const marker = '/audio/'
-  const i = url.indexOf(marker)
-  if (i === -1) return null
-  return decodeURIComponent(url.slice(i + marker.length).split('?')[0])
-}
-
-// Delete a post: removes the row AND its audio file from Storage.
+// Delete a post: removes the row AND its audio file.
+// Handles both new R2 keys (e.g. "posts/uuid.mp3") and any old Supabase URLs.
 export async function deletePost(
   id: string,
 ): Promise<{ error: string } | void> {
@@ -222,7 +187,6 @@ export async function deletePost(
 
   const supabase = createAdminClient()
 
-  // Look up the audio URL first so we know which file to remove.
   const { data: post } = await supabase
     .from('posts')
     .select('audio_url')
@@ -232,10 +196,18 @@ export async function deletePost(
   const { error } = await supabase.from('posts').delete().eq('id', id)
   if (error) return { error: error.message }
 
-  // Best-effort: remove the audio file too. An orphaned file is harmless.
   if (post?.audio_url) {
-    const path = audioPathFromUrl(post.audio_url)
-    if (path) await supabase.storage.from('audio').remove([path])
+    const audioUrl = post.audio_url
+    if (audioUrl.startsWith('https://')) {
+      const marker = '/audio/'
+      const i = audioUrl.indexOf(marker)
+      if (i !== -1) {
+        const path = decodeURIComponent(audioUrl.slice(i + marker.length).split('?')[0])
+        await supabase.storage.from('audio').remove([path])
+      }
+    } else {
+      await deleteAudioFromR2(audioUrl)
+    }
   }
 
   revalidatePath('/admin/posts')

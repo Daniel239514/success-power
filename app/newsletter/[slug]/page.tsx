@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizePostHtml } from '@/lib/sanitize'
+import { getSignedAudioUrl } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,16 @@ export default async function NewsletterPostPage({
 
   if (!post) notFound()
 
+  // Resolve the audio URL — R2 keys get a fresh presigned URL; old Supabase
+  // public URLs are used as-is (no posts currently have audio, so this path
+  // is for future posts only).
+  let audioSrc: string | null = null
+  if (post.audio_url) {
+    audioSrc = post.audio_url.startsWith('https://')
+      ? post.audio_url
+      : await getSignedAudioUrl(post.audio_url)
+  }
+
   // Sanitise the stored HTML before rendering it (see lib/sanitize.ts).
   const safeHtml = sanitizePostHtml(post.body_html)
 
@@ -59,11 +70,11 @@ export default async function NewsletterPostPage({
           {post.title}
         </h1>
 
-        {post.audio_url && (
+        {audioSrc && (
           <audio
             controls
             preload="none"
-            src={post.audio_url}
+            src={audioSrc}
             className="mt-6 w-full"
           >
             Your browser does not support audio playback.

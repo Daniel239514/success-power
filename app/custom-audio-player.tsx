@@ -15,16 +15,18 @@ function formatTime(seconds: number) {
 }
 
 export default function CustomAudioPlayer({
-  src,
   title,
   episodeId,
   userId,
 }: {
-  src: string
   title: string
   episodeId: string
   userId: string
 }) {
+  // The signed audio URL fetched from the server. Null while loading.
+  const [src, setSrc] = useState<string | null>(null)
+  const [srcLoading, setSrcLoading] = useState(true)
+
   // Whether audio is currently playing. Changing this redraws the icon.
   const [isPlaying, setIsPlaying] = useState(false)
 
@@ -49,6 +51,24 @@ export default function CustomAudioPlayer({
   // Create the Supabase browser client exactly once. Passing a function to
   // useState means it runs only on the first render, not on every render.
   const [supabase] = useState(() => createClient())
+
+  // Fetch a signed URL from the server. Called on mount and again if the URL
+  // expires (the error handler in the <audio> element triggers a refresh).
+  const fetchSignedUrl = useCallback(async () => {
+    setSrcLoading(true)
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/audio-url`)
+      if (!res.ok) return
+      const { url } = await res.json()
+      setSrc(url)
+    } finally {
+      setSrcLoading(false)
+    }
+  }, [episodeId])
+
+  useEffect(() => {
+    fetchSignedUrl()
+  }, [fetchSignedUrl])
 
   // The filled percentage of the bar. Guard against dividing by zero.
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
@@ -251,12 +271,32 @@ export default function CustomAudioPlayer({
     updatePositionState()
   }
 
+  // When the <audio> element fires an error, it's likely a URL expiry (403).
+  // Re-fetch a fresh signed URL — if the server returns one, it was expiry;
+  // if it returns 403, the user genuinely isn't authorised and we do nothing.
+  async function handleAudioError() {
+    const res = await fetch(`/api/episodes/${episodeId}/audio-url`)
+    if (!res.ok) return
+    const { url } = await res.json()
+    setSrc(url)
+    // Reload the audio element so it picks up the new src.
+    audioRef.current?.load()
+  }
+
+  if (srcLoading) {
+    return (
+      <div className="mb-10 flex items-center justify-center rounded-2xl bg-[#141414] p-10">
+        <span className="text-sm text-neutral-400">Loading audio…</span>
+      </div>
+    )
+  }
+
   return (
     <div className="relative mb-10 rounded-2xl bg-[#141414] p-6">
       {/* The real audio engine, hidden. We control it through audioRef. */}
       <audio
         ref={audioRef}
-        src={src}
+        src={src ?? undefined}
         preload="metadata"
         onPlay={handlePlay}
         onPause={handlePause}
@@ -266,6 +306,7 @@ export default function CustomAudioPlayer({
           setIsPlaying(false)
           saveProgress(true)
         }}
+        onError={handleAudioError}
       />
 
       {/* "Resuming from 2:30" note — floats in the top padding (absolute, so it
