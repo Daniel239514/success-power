@@ -29,7 +29,7 @@ export async function GET() {
               'http://localhost:3000',
             ],
             AllowedMethods: ['PUT'],
-            AllowedHeaders: ['Content-Type'],
+            AllowedHeaders: ['*'],
             MaxAgeSeconds: 3600,
           },
         ],

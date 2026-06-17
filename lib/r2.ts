@@ -71,6 +71,11 @@ export async function getPresignedPutUrl(
       // Prevent the SDK from including CRC32 checksum headers in the
       // presigned URL. SDK v3.679+ computes CRC32(empty) at presign time
       // which causes R2 to reject the real file with 400.
+      // x-amz-content-sha256 is hoisted to the URL query params and ends up
+      // in X-Amz-SignedHeaders, requiring the browser to send it as a header.
+      // The browser won't send it automatically, causing R2 to return 400.
+      // Marking it as unsignable removes it from X-Amz-SignedHeaders;
+      // marking it as unhoistable keeps it out of the URL query params too.
       unsignableHeaders: new Set([
         'x-amz-checksum-crc32',
         'x-amz-checksum-crc32c',
@@ -78,7 +83,9 @@ export async function getPresignedPutUrl(
         'x-amz-checksum-sha256',
         'x-amz-sdk-checksum-algorithm',
         'x-amz-request-algorithm',
+        'x-amz-content-sha256',
       ]),
+      unhoistableHeaders: new Set(['x-amz-content-sha256']),
     },
   )
 }

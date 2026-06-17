@@ -81,6 +81,7 @@ export default function EditEpisodeForm({
         const buffer = await file.arrayBuffer()
         const _u = new URL(presignJson.url)
         console.log('R2 URL params:', [..._u.searchParams.keys()].join(', '))
+        console.log('R2 SignedHeaders:', _u.searchParams.get('X-Amz-SignedHeaders'))
         const r2Res = await fetch(presignJson.url, { method: 'PUT', body: buffer })
         if (!r2Res.ok) {
           const body = await r2Res.text().catch(() => '')
