@@ -55,12 +55,11 @@ export async function getSignedAudioUrl(
 // directly to R2 — bypassing Vercel entirely, so no server timeout applies.
 export async function getPresignedPutUrl(
   key: string,
-  contentType: string,
   expiresIn = 300,
 ): Promise<string> {
   return getSignedUrl(
     r2,
-    new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }),
+    new PutObjectCommand({ Bucket: BUCKET, Key: key }),
     { expiresIn },
   )
 }

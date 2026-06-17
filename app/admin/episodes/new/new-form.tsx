@@ -50,7 +50,7 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
     // --- 1) Get a presigned PUT URL (tiny JSON request, no file bytes) ---
     setStatus('uploading')
 
-    let presignJson: { url?: string; key?: string; contentType?: string; error?: string }
+    let presignJson: { url?: string; key?: string; error?: string }
     try {
       const presignRes = await fetch('/api/admin/upload-audio/presign', {
         method: 'POST',
@@ -65,16 +65,14 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
 
     if (!presignJson.url || !presignJson.key) return fail('Upload service error — try again.')
 
-    // --- 2) PUT the file directly to R2 (bytes bypass Vercel — no timeout) ---
+    // --- 2) PUT file bytes directly to R2 — bypasses Vercel (no timeout).
+    // ArrayBuffer body avoids automatic Content-Type, keeping CORS preflight simple.
     try {
-      const r2Res = await fetch(presignJson.url, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': presignJson.contentType! },
-      })
-      if (!r2Res.ok) return fail(`Upload failed (${r2Res.status}). Try again.`)
-    } catch {
-      return fail('Upload failed — check your connection and try again.')
+      const buffer = await file.arrayBuffer()
+      const r2Res = await fetch(presignJson.url, { method: 'PUT', body: buffer })
+      if (!r2Res.ok) return fail(`R2 error ${r2Res.status}. Try again.`)
+    } catch (err) {
+      return fail(`Upload error: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     // --- 3) Save the episode row with the R2 key ---

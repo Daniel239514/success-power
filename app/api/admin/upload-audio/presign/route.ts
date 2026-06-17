@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   }
 
   const key = `${prefix}/${crypto.randomUUID()}.${ext}`
-  const url = await getPresignedPutUrl(key, contentType)
+  const url = await getPresignedPutUrl(key)
 
-  return NextResponse.json({ url, key, contentType })
+  return NextResponse.json({ url, key })
 }
