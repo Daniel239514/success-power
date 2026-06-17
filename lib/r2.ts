@@ -66,7 +66,20 @@ export async function getPresignedPutUrl(
   return getSignedUrl(
     r2,
     new PutObjectCommand({ Bucket: BUCKET, Key: key }),
-    { expiresIn },
+    {
+      expiresIn,
+      // Prevent the SDK from including CRC32 checksum headers in the
+      // presigned URL. SDK v3.679+ computes CRC32(empty) at presign time
+      // which causes R2 to reject the real file with 400.
+      unsignableHeaders: new Set([
+        'x-amz-checksum-crc32',
+        'x-amz-checksum-crc32c',
+        'x-amz-checksum-sha1',
+        'x-amz-checksum-sha256',
+        'x-amz-sdk-checksum-algorithm',
+        'x-amz-request-algorithm',
+      ]),
+    },
   )
 }
 

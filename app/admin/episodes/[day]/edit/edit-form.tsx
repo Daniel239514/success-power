@@ -79,7 +79,8 @@ export default function EditEpisodeForm({
       // ArrayBuffer body avoids automatic Content-Type, keeping CORS preflight simple.
       try {
         const buffer = await file.arrayBuffer()
-        console.log('Uploading to:', new URL(presignJson.url).hostname)
+        const _u = new URL(presignJson.url)
+        console.log('R2 URL params:', [..._u.searchParams.keys()].join(', '))
         const r2Res = await fetch(presignJson.url, { method: 'PUT', body: buffer })
         if (!r2Res.ok) {
           const body = await r2Res.text().catch(() => '')
