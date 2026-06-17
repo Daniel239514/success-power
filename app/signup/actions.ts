@@ -16,32 +16,61 @@ export async function signup(formData: FormData) {
 
   if (error) {
     console.error('Signup error:', error.status, error.code, error.message)
-    const qs = new URLSearchParams({ error: error.message || error.code || 'Signup failed' })
+    let msg = error.message && error.message !== '{}' ? error.message : ''
+    if (!msg) {
+      msg =
+        error.status === 504
+          ? 'Sign-up is temporarily unavailable. Please try again in a minute.'
+          : error.code || 'Sign up failed. Please try again.'
+    }
+    const qs = new URLSearchParams({ error: msg })
     if (refCode) qs.set('ref', refCode)
     redirect(`/signup?${qs.toString()}`)
   }
 
-  // Record the referral if a valid code was passed and signup succeeded.
-  if (refCode && data.user) {
+  if (data.user) {
+    const admin = createAdminClient()
+
+    // Generate a referral code for the new user. This replaces the database
+    // trigger (which deadlocked when referral_codes was locked after a DB resume).
+    // App-level code can't deadlock — safe to run here unconditionally.
     try {
-      const admin = createAdminClient()
-
-      const { data: codeRow } = await admin
-        .from('referral_codes')
-        .select('user_id')
-        .eq('code', refCode)
-        .maybeSingle()
-
-      // Only insert if the code exists and the referrer isn't the same person.
-      if (codeRow && codeRow.user_id !== data.user.id) {
-        await admin.from('referrals').insert({
-          referrer_id: codeRow.user_id,
-          referred_id: data.user.id,
-          status: 'pending',
-        })
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const suffix = Array.from({ length: 6 }, () =>
+          chars[Math.floor(Math.random() * chars.length)],
+        ).join('')
+        const code = `REF-${suffix}`
+        const { error: codeErr } = await admin
+          .from('referral_codes')
+          .insert({ user_id: data.user.id, code })
+        if (!codeErr) break // success — unique code inserted
+        // unique_violation → retry with a new code; any other error → give up
+        if (!codeErr.code?.includes('23505')) break
       }
     } catch {
-      // Silently ignore: duplicate referral, code not found, etc.
+      // Never block signup for referral code generation.
+    }
+
+    // Record the referral relationship if the user arrived via a referral link.
+    if (refCode) {
+      try {
+        const { data: codeRow } = await admin
+          .from('referral_codes')
+          .select('user_id')
+          .eq('code', refCode)
+          .maybeSingle()
+
+        if (codeRow && codeRow.user_id !== data.user.id) {
+          await admin.from('referrals').insert({
+            referrer_id: codeRow.user_id,
+            referred_id: data.user.id,
+            status: 'pending',
+          })
+        }
+      } catch {
+        // Silently ignore: duplicate referral, code not found, etc.
+      }
     }
   }
 
