@@ -16,6 +16,11 @@ const r2 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
   forcePathStyle: true,
+  // SDK v3.679+ defaults to WHEN_SUPPORTED which embeds a CRC32 of an empty
+  // body in presigned PUT URLs — causing a 400 when the real file arrives.
+  // WHEN_REQUIRED disables the automatic checksum for standard PutObject.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
 })
 
 const BUCKET = process.env.R2_BUCKET_NAME!
