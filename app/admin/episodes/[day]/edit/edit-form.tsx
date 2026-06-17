@@ -79,12 +79,14 @@ export default function EditEpisodeForm({
       // ArrayBuffer body avoids automatic Content-Type, keeping CORS preflight simple.
       try {
         const buffer = await file.arrayBuffer()
+        console.log('Uploading to:', new URL(presignJson.url).hostname)
         const r2Res = await fetch(presignJson.url, { method: 'PUT', body: buffer })
         if (!r2Res.ok) {
           const body = await r2Res.text().catch(() => '')
           return fail(`R2 error ${r2Res.status}: ${body || r2Res.statusText}`)
         }
       } catch (err) {
+        console.error('R2 PUT failed:', presignJson.url?.split('?')[0])
         return fail(`Upload error: ${err instanceof Error ? err.message : String(err)}`)
       }
 
