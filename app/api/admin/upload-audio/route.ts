@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminUser } from '@/lib/admin'
 import { uploadAudioToR2 } from '@/lib/r2'
 
+export const maxDuration = 60
+
 const MAX_BYTES = 50 * 1024 * 1024
 
 const CONTENT_TYPES: Record<string, string> = {

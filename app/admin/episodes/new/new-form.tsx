@@ -49,17 +49,31 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
 
     // --- 1) Upload to R2 via the server-side upload route ---
     setStatus('uploading')
-    const body = new FormData()
-    body.append('file', file)
-    body.append('prefix', 'episodes')
 
-    const uploadRes = await fetch('/api/admin/upload-audio', {
-      method: 'POST',
-      body,
-    })
-    const uploadJson = await uploadRes.json()
-    if (!uploadRes.ok || uploadJson.error) {
-      return fail(uploadJson.error ?? 'Upload failed.')
+    // Step 1: get a presigned PUT URL from Vercel (no file bytes, very fast).
+    let presignJson: { url?: string; key?: string; contentType?: string; error?: string }
+    try {
+      const presignRes = await fetch('/api/admin/upload-audio/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, prefix: 'episodes' }),
+      })
+      presignJson = await presignRes.json()
+      if (!presignRes.ok || presignJson.error) return fail(presignJson.error ?? 'Could not prepare upload.')
+    } catch {
+      return fail('Could not reach server. Check your connection.')
+    }
+
+    // Step 2: upload directly from browser to R2 — bypasses Vercel timeout entirely.
+    try {
+      const r2Res = await fetch(presignJson.url!, {
+        method: 'PUT',
+        headers: { 'Content-Type': presignJson.contentType! },
+        body: file,
+      })
+      if (!r2Res.ok) return fail(`Storage upload failed (${r2Res.status}). Try again.`)
+    } catch {
+      return fail('Upload to storage failed. Check your connection.')
     }
 
     // --- 2) Save the episode row with the R2 key ---
@@ -69,7 +83,7 @@ export default function NewEpisodeForm({ initialDay }: { initialDay?: string }) 
       title,
       description,
       keyQuote,
-      audioUrl: uploadJson.key,
+      audioUrl: presignJson.key!,
     })
 
     if (result?.error) {

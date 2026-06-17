@@ -51,6 +51,20 @@ export async function getSignedAudioUrl(
   })
 }
 
+// Generate a short-lived presigned PUT URL so the browser can upload a file
+// directly to R2 — bypassing Vercel entirely, so no server timeout applies.
+export async function getPresignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 300,
+): Promise<string> {
+  return getSignedUrl(
+    r2,
+    new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }),
+    { expiresIn },
+  )
+}
+
 // Delete a file from R2. Called when an episode or post is deleted.
 export async function deleteAudioFromR2(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }))

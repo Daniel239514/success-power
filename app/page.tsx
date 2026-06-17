@@ -62,24 +62,22 @@ export default async function Home() {
     ? calculateDayNumber(profile.subscription_start_date, tz)
     : 1
 
-  const todayEpisode = await getEpisodeForDay(currentDay)
-
-  // Most recent published newsletter post (for the "Latest from Sam" card).
-  // Both free and paid users see it; it's hidden entirely if there are none.
-  const { data: latestPost } = await supabase
-    .from('posts')
-    .select('title, slug, body_html')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // Fetch all in parallel — none of these depend on each other.
+  // All five queries are independent — run them in a single parallel round-trip.
   const [
+    todayEpisode,
+    { data: latestPost },
     { data: nextMasterclass },
     { data: firstCourse },
     { data: completedProgress },
   ] = await Promise.all([
+    getEpisodeForDay(currentDay),
+    supabase
+      .from('posts')
+      .select('title, slug, body_html')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     supabase
       .from('masterclasses')
       .select('id, title, members_price, general_price, currency, checkout_url, status')
@@ -94,8 +92,6 @@ export default async function Home() {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    // Join listening_progress → episodes to get the day_number of each completed episode.
-    // Used to compute streak, days completed, and days remaining.
     supabase
       .from('listening_progress')
       .select('episodes(day_number)')

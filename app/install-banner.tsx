@@ -13,6 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function InstallBanner() {
   const [show, setShow] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
@@ -44,8 +45,11 @@ export default function InstallBanner() {
   }, [])
 
   function dismiss() {
-    localStorage.setItem(STORAGE_KEY, '1')
-    setShow(false)
+    setLeaving(true)
+    setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, '1')
+      setShow(false)
+    }, 220)
   }
 
   async function install() {
@@ -63,7 +67,9 @@ export default function InstallBanner() {
   if (!show) return null
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-[#c9a84c]/30 bg-neutral-900 p-4">
+    <div
+      className={`w-full max-w-md rounded-xl border border-[#c9a84c]/30 bg-neutral-900 p-4 transition-[opacity,transform] duration-200 ${leaving ? 'pointer-events-none -translate-y-2 opacity-0' : ''}`}
+    >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-xl" aria-hidden>
           📲

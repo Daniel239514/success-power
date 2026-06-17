@@ -72,3 +72,30 @@ body {
 .rich-text:focus {
   outline: none;
 }
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Episode list cards slide up staggered, 50ms apart, capped at 8th card */
+.episode-list li {
+  animation: slide-up-fade 350ms ease-out both;
+}
+.episode-list li:nth-child(1)  { animation-delay: 0ms;   }
+.episode-list li:nth-child(2)  { animation-delay: 50ms;  }
+.episode-list li:nth-child(3)  { animation-delay: 100ms; }
+.episode-list li:nth-child(4)  { animation-delay: 150ms; }
+.episode-list li:nth-child(5)  { animation-delay: 200ms; }
+.episode-list li:nth-child(6)  { animation-delay: 250ms; }
+.episode-list li:nth-child(7)  { animation-delay: 300ms; }
+.episode-list li:nth-child(n+8) { animation-delay: 350ms; }
+
+/* Respect the user's OS "reduce motion" setting — skip all animations */
+@media (prefers-reduced-motion: reduce) {
+  .episode-list li {
+    animation: none;
+  }
+}

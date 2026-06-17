@@ -48,6 +48,11 @@ export default function CustomAudioPlayer({
   // moved to it (we can't seek before the audio knows its own length).
   const pendingSeekRef = useRef<number | null>(null)
 
+  // Prevents the error handler from retrying more than once. A single retry
+  // is enough to handle a genuinely expired URL — repeated retries mean the
+  // file itself is missing or inaccessible, and we should stop rather than loop.
+  const retryingRef = useRef(false)
+
   // Create the Supabase browser client exactly once. Passing a function to
   // useState means it runs only on the first render, not on every render.
   const [supabase] = useState(() => createClient())
@@ -271,16 +276,23 @@ export default function CustomAudioPlayer({
     updatePositionState()
   }
 
-  // When the <audio> element fires an error, it's likely a URL expiry (403).
-  // Re-fetch a fresh signed URL — if the server returns one, it was expiry;
-  // if it returns 403, the user genuinely isn't authorised and we do nothing.
+  // When the <audio> element fires an error, attempt one refresh of the signed
+  // URL in case it expired. If the audio fails again after that, stop — the
+  // file is missing or inaccessible and retrying further would loop forever.
   async function handleAudioError() {
-    const res = await fetch(`/api/episodes/${episodeId}/audio-url`)
-    if (!res.ok) return
-    const { url } = await res.json()
-    setSrc(url)
-    // Reload the audio element so it picks up the new src.
-    audioRef.current?.load()
+    if (retryingRef.current) return
+    retryingRef.current = true
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/audio-url`)
+      if (!res.ok) return
+      const { url } = await res.json()
+      setSrc(url)
+      // React will update the src attribute on re-render; the browser reloads
+      // the audio automatically. No need to call .load() manually.
+    } finally {
+      // Allow one more retry if a future session genuinely expires again.
+      setTimeout(() => { retryingRef.current = false }, 10_000)
+    }
   }
 
   if (srcLoading) {
@@ -395,9 +407,9 @@ export default function CustomAudioPlayer({
         <div className="relative h-6 w-full">
           {/* Gray track, centered vertically inside the taller touch area */}
           <div className="absolute left-0 top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full bg-neutral-700">
-            {/* Gold filled portion grows with progress */}
+            {/* Gold filled portion grows with progress — 100ms ease keeps it smooth */}
             <div
-              className="absolute left-0 top-0 h-full rounded-full bg-[#c9a84c]"
+              className="absolute left-0 top-0 h-full rounded-full bg-[#c9a84c] transition-[width] duration-100 ease-linear"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -405,7 +417,7 @@ export default function CustomAudioPlayer({
           {/* Draggable dot follows the progress. pointer-events-none so clicks
               pass through to the range input underneath it. */}
           <div
-            className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9a84c] shadow"
+            className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9a84c] shadow transition-[left] duration-100 ease-linear"
             style={{ left: `${progress}%` }}
           />
 

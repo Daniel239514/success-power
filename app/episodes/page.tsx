@@ -53,7 +53,7 @@ export default async function EpisodesPage() {
         Day {dayNumber} of {TOTAL_DAYS}
       </p>
 
-      <ul className="flex flex-col gap-4">
+      <ul className="episode-list flex flex-col gap-4">
         {episodes?.map((ep) => {
           const isPast = ep.day_number < dayNumber
           const isToday = ep.day_number === dayNumber
