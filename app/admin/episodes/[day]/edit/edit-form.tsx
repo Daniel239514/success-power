@@ -57,28 +57,37 @@ export default function EditEpisodeForm({
         return fail('Audio file must be 50MB or smaller.')
       }
 
+      // Step 1: Get a presigned PUT URL (tiny JSON request, no file bytes)
       setStatus('uploading')
-      const body = new FormData()
-      body.append('file', file)
-      body.append('prefix', 'episodes')
 
-      let uploadRes: Response
-      let uploadJson: { key?: string; error?: string }
+      let presignJson: { url?: string; key?: string; contentType?: string; error?: string }
       try {
-        uploadRes = await fetch('/api/admin/upload-audio', {
+        const presignRes = await fetch('/api/admin/upload-audio/presign', {
           method: 'POST',
-          body,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, prefix: 'episodes' }),
         })
-        uploadJson = await uploadRes.json()
+        presignJson = await presignRes.json()
+        if (!presignRes.ok || presignJson.error) return fail(presignJson.error ?? 'Could not start upload.')
+      } catch {
+        return fail('Could not connect. Check your internet and try again.')
+      }
+
+      if (!presignJson.url || !presignJson.key) return fail('Upload service error — try again.')
+
+      // Step 2: PUT the file directly to R2 (bytes bypass Vercel — no timeout)
+      try {
+        const r2Res = await fetch(presignJson.url, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': presignJson.contentType! },
+        })
+        if (!r2Res.ok) return fail(`Upload failed (${r2Res.status}). Try again.`)
       } catch {
         return fail('Upload failed — check your connection and try again.')
       }
-      if (!uploadRes.ok || uploadJson.error) {
-        return fail(uploadJson.error ?? 'Upload failed.')
-      }
-      if (!uploadJson.key) return fail('Upload failed — no key returned.')
 
-      audioUrl = uploadJson.key
+      audioUrl = presignJson.key
     }
 
     setStatus('saving')
