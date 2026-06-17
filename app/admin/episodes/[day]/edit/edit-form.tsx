@@ -82,9 +82,12 @@ export default function EditEpisodeForm({
           body: file,
           headers: { 'Content-Type': presignJson.contentType! },
         })
-        if (!r2Res.ok) return fail(`Upload failed (${r2Res.status}). Try again.`)
-      } catch {
-        return fail('Upload failed — check your connection and try again.')
+        if (!r2Res.ok) {
+          const body = await r2Res.text().catch(() => '')
+          return fail(`R2 error ${r2Res.status}: ${body || r2Res.statusText}`)
+        }
+      } catch (err) {
+        return fail(`Upload error: ${err instanceof Error ? err.message : String(err)}`)
       }
 
       audioUrl = presignJson.key
