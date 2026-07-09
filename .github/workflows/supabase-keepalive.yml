@@ -13,16 +13,19 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 3        # kill the job if it hangs (e.g. Supabase paused)
     steps:
       - name: Ping Supabase
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 30 \
             "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/profiles?select=id&limit=1" \
             -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}")
           echo "Supabase ping status: $STATUS"
           if [ "$STATUS" != "200" ] && [ "$STATUS" != "406" ]; then
-            echo "Unexpected status $STATUS — Supabase may be paused"
+            echo "Unexpected status $STATUS — Supabase may be paused or unreachable"
             exit 1
           fi
           echo "Supabase is alive."
